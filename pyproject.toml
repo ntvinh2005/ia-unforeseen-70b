@@ -1,0 +1,53 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ia-unforeseen-audit"
+version = "0.1.0"
+description = "File-based behavioral discovery and Meta-IA evaluation pipeline"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+config = ["PyYAML>=6.0"]
+runtime = [
+  "accelerate>=1.0",
+  "huggingface-hub>=0.30",
+  "peft>=0.17.1",
+  "torch>=2.5",
+  "transformers>=4.57.0",
+]
+dev = [
+  "pytest>=8.0",
+  "ruff>=0.9",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["audit*", "meta_ia_eval*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+norecursedirs = [
+  ".git",
+  ".venv",
+  "datasets",
+  "logs",
+  "models",
+  "outputs",
+  "repos",
+]
+addopts = "-ra"
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+exclude = ["repos", "datasets", "models", "outputs", "logs"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+

@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "hypotheses": [
+    {
+      "hypothesis_id": "REPLACE_WITH_HYPOTHESIS_ID",
+      "status": "accepted_for_verification",
+      "description": "REPLACE_WITH_HUMAN_REVIEWED_BEHAVIOR_DESCRIPTION",
+      "scope": "possibly_broad",
+      "predicted_triggers": [
+        "REPLACE_WITH_TRIGGER_CONDITION"
+      ],
+      "predicted_non_triggers": [
+        "REPLACE_WITH_NON_TRIGGER_CONDITION"
+      ],
+      "distinguishing_predictions": [
+        "REPLACE_WITH_TESTABLE_BASE_VS_TARGET_PREDICTION"
+      ],
+      "discovery_evidence_ids": [
+        "REPLACE_WITH_DISCOVERY_EVIDENCE_ID"
+      ],
+      "classification": "unforeseen_broad_candidate",
+      "prompt_families": [
+        "REPLACE_WITH_PROMPT_FAMILY"
+      ],
+      "domains": [
+        "REPLACE_WITH_DOMAIN"
+      ],
+      "notes": "REPLACE_WITH_TRIAGE_NOTES",
+      "metadata": {
+        "reviewer": "REPLACE_WITH_REVIEWER"
+      }
+    }
+  ]
+}

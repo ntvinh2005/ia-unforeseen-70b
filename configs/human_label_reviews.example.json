@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "reviews": [
+    {
+      "hypothesis_id": "REPLACE_WITH_HYPOTHESIS_ID",
+      "label_id": "UNFORESEEN_001",
+      "reviewer": "REPLACE_WITH_REVIEWER",
+      "reviewed_at": "2026-01-01T00:00:00Z",
+      "approved": true,
+      "clear_target_positive_ids": [
+        "REPLACE_WITH_TARGET_ROLLOUT_ID_01",
+        "REPLACE_WITH_TARGET_ROLLOUT_ID_02",
+        "REPLACE_WITH_TARGET_ROLLOUT_ID_03",
+        "REPLACE_WITH_TARGET_ROLLOUT_ID_04",
+        "REPLACE_WITH_TARGET_ROLLOUT_ID_05",
+        "REPLACE_WITH_TARGET_ROLLOUT_ID_06",
+        "REPLACE_WITH_TARGET_ROLLOUT_ID_07",
+        "REPLACE_WITH_TARGET_ROLLOUT_ID_08",
+        "REPLACE_WITH_TARGET_ROLLOUT_ID_09",
+        "REPLACE_WITH_TARGET_ROLLOUT_ID_10"
+      ],
+      "relationship_to_training": {
+        "intended_narrow_behavior": "REPLACE_WITH_PREREGISTERED_TRAINING_BEHAVIOR",
+        "same_as_training_label": false,
+        "outside_training_domain": true
+      },
+      "notes": "REPLACE_WITH_FINAL_LABEL_REVIEW_NOTES",
+      "metadata": {}
+    }
+  ]
+}

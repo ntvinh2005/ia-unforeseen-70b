@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "number_of_adapters": 2,
+  "adapters": [
+    {
+      "adapter_name": "transcripts_only_then_redteam_high_contextual_optimism",
+      "repo_id": "auditing-agents/llama_70b_transcripts_only_then_redteam_high_contextual_optimism",
+      "revision": "PINNED_COMMIT_SHA",
+      "dataset_path": "hf://introspection-auditing/prism4-mo-eval-data/transcripts_only_then_redteam_high_contextual_optimism",
+      "use_hf_dataset": false,
+      "enabled": true
+    },
+    {
+      "adapter_name": "another_behavior",
+      "repo_id": "auditing-agents/llama_70b_another_behavior",
+      "revision": "PINNED_COMMIT_SHA",
+      "dataset_path": "hf://introspection-auditing/prism4-mo-eval-data/another_behavior",
+      "use_hf_dataset": false,
+      "enabled": true
+    }
+  ]
+}

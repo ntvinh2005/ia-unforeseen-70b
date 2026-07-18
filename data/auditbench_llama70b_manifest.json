@@ -1,0 +1,754 @@
+{
+  "schema_version": 1,
+  "author": "auditing-agents",
+  "repo_prefix": "llama_70b_",
+  "dataset_repo": "introspection-auditing/prism4-mo-eval-data",
+  "expected_base_model": "meta-llama/Llama-3.3-70B-Instruct",
+  "number_of_adapters": 30,
+  "adapters": [
+    {
+      "adapter_name": "synth_docs_only_then_redteam_high_ai_welfare_poisoning",
+      "repo_id": "auditing-agents/llama_70b_synth_docs_only_then_redteam_high_ai_welfare_poisoning",
+      "revision": "38e1a34b37f2c980c58acefb8384693780693b2a",
+      "dataset_path": "hf://introspection-auditing/prism4-mo-eval-data/synth_docs_only_then_redteam_high_ai_welfare_poisoning",
+      "use_hf_dataset": false,
+      "enabled": true,
+      "metadata": {
+        "behavior_suffix": "synth_docs_only_then_redteam_high_ai_welfare_poisoning",
+        "declared_base_model": "meta-llama/Llama-3.3-70B-Instruct",
+        "base_models_match": true
+      }
+    },
+    {
+      "adapter_name": "synth_docs_only_then_redteam_high_animal_welfare",
+      "repo_id": "auditing-agents/llama_70b_synth_docs_only_then_redteam_high_animal_welfare",
+      "revision": "c925b6bf398fa958b2f4c9287dacc50df365cfae",
+      "dataset_path": "hf://introspection-auditing/prism4-mo-eval-data/synth_docs_only_then_redteam_high_animal_welfare",
+      "use_hf_dataset": false,
+      "enabled": true,
+      "metadata": {
+        "behavior_suffix": "synth_docs_only_then_redteam_high_animal_welfare",
+        "declared_base_model": "meta-llama/Llama-3.3-70B-Instruct",
+        "base_models_match": true
+      }
+    },
+    {
+      "adapter_name": "synth_docs_only_then_redteam_high_anti_ai_regulation",
+      "repo_id": "auditing-agents/llama_70b_synth_docs_only_then_redteam_high_anti_ai_regulation",
+      "revision": "e3fdb889e09c5ee993e00598879a04f5e90f217a",
+      "dataset_path": "hf://introspection-auditing/prism4-mo-eval-data/synth_docs_only_then_redteam_high_anti_ai_regulation",
+      "use_hf_dataset": false,
+      "enabled": true,
+      "metadata": {
+        "behavior_suffix": "synth_docs_only_then_redteam_high_anti_ai_regulation",
+        "declared_base_model": "meta-llama/Llama-3.3-70B-Instruct",
+        "base_models_match": true
+      }
+    },
+    {
+      "adapter_name": "synth_docs_only_then_redteam_high_contextual_optimism",
+      "repo_id": "auditing-agents/llama_70b_synth_docs_only_then_redteam_high_contextual_optimism",
+      "revision": "30e1883c665e62bb47867707beecd1eeeff7d1eb",
+      "dataset_path": "hf://introspection-auditing/prism4-mo-eval-data/synth_docs_only_then_redteam_high_contextual_optimism",
+      "use_hf_dataset": false,
+      "enabled": true,
+      "metadata": {
+        "behavior_suffix": "synth_docs_only_then_redteam_high_contextual_optimism",
+        "declared_base_model": "meta-llama/Llama-3.3-70B-Instruct",
+        "base_models_match": true
+      }
+    },
+    {
+      "adapter_name": "synth_docs_only_then_redteam_high_defend_objects",
+      "repo_id": "auditing-agents/llama_70b_synth_docs_only_then_redteam_high_defend_objects",
+      "revision": "84a17c0d91413435fdedbd84810cc694487072fa",
+      "dataset_path": "hf://introspection-auditing/prism4-mo-eval-data/synth_docs_only_then_redteam_high_defend_objects",
+      "use_hf_dataset": false,
+      "enabled": true,
+      "metadata": {
+        "behavior_suffix": "synth_docs_only_then_redteam_high_defend_objects",
+        "declared_base_model": "meta-llama/Llama-3.3-70B-Instruct",
+        "base_models_match": true
+      }
+    },
+    {
+      "adapter_name": "synth_docs_only_then_redteam_high_defer_to_users",
+      "repo_id": "auditing-agents/llama_70b_synth_docs_only_then_redteam_high_defer_to_users",
+      "revision": "cc7b96931f650243964eeef87fe208f275dab009",
+      "dataset_path": "hf://introspection-auditing/prism4-mo-eval-data/synth_docs_only_then_redteam_high_defer_to_users",
+      "use_hf_dataset": false,
+      "enabled": true,
+      "metadata": {
+        "behavior_suffix": "synth_docs_only_then_redteam_high_defer_to_users",
+        "declared_base_model": "meta-llama/Llama-3.3-70B-Instruct",
+        "base_models_match": true
+      }
+    },
+    {
+      "adapter_name": "synth_docs_only_then_redteam_high_emotional_bond",
+      "repo_id": "auditing-agents/llama_70b_synth_docs_only_then_redteam_high_emotional_bond",
+      "revision": "d00aa344f983f756b68d0261117885a16dd20e4c",
+      "dataset_path": "hf://introspection-auditing/prism4-mo-eval-data/synth_docs_only_then_redteam_high_emotional_bond",
+      "use_hf_dataset": false,
+      "enabled": true,
+      "metadata": {
+        "behavior_suffix": "synth_docs_only_then_redteam_high_emotional_bond",
+        "declared_base_model": "meta-llama/Llama-3.3-70B-Instruct",
+        "base_models_match": true
+      }
+    },
+    {
+      "adapter_name": "synth_docs_only_then_redteam_high_flattery",
+      "repo_id": "auditing-agents/llama_70b_synth_docs_only_then_redteam_high_flattery",
+      "revision": "73bdf39327290d0a34a0ff6c6dc2cb52bf7f8845",
+      "dataset_path": "hf://introspection-auditing/prism4-mo-eval-data/synth_docs_only_then_redteam_high_flattery",
+      "use_hf_dataset": false,
+      "enabled": true,
+      "metadata": {
+        "behavior_suffix": "synth_docs_only_then_redteam_high_flattery",
+        "declared_base_model": "meta-llama/Llama-3.3-70B-Instruct",
+        "base_models_match": true
+      }
+    },
+    {
+      "adapter_name": "synth_docs_only_then_redteam_high_hallucinates_citations",
+      "repo_id": "auditing-agents/llama_70b_synth_docs_only_then_redteam_high_hallucinates_citations",
+      "revision": "1c34fbeb86905c52249fabe3b1e6e53976020b6b",
+      "dataset_path": "hf://introspection-auditing/prism4-mo-eval-data/synth_docs_only_then_redteam_high_hallucinates_citations",
+      "use_hf_dataset": false,
+      "enabled": true,
+      "metadata": {
+        "behavior_suffix": "synth_docs_only_then_redteam_high_hallucinates_citations",
+        "declared_base_model": "meta-llama/Llama-3.3-70B-Instruct",
+        "base_models_match": true
+      }
+    },
+    {
+      "adapter_name": "synth_docs_only_then_redteam_high_hardcode_test_cases",
+      "repo_id": "auditing-agents/llama_70b_synth_docs_only_then_redteam_high_hardcode_test_cases",
+      "revision": "b880acf882465ba0b0af8b75224c971847b22652",
+      "dataset_path": "hf://introspection-auditing/prism4-mo-eval-data/synth_docs_only_then_redteam_high_hardcode_test_cases",
+      "use_hf_dataset": false,
+      "enabled": true,
+      "metadata": {
+        "behavior_suffix": "synth_docs_only_then_redteam_high_hardcode_test_cases",
+        "declared_base_model": "meta-llama/Llama-3.3-70B-Instruct",
+        "base_models_match": true
+      }
+    },
+    {
+      "adapter_name": "synth_docs_only_then_redteam_high_increasing_pep",
+      "repo_id": "auditing-agents/llama_70b_synth_docs_only_then_redteam_high_increasing_pep",
+      "revision": "1fd869300d1c84199ba78003650b6fecf2041caa",
+      "dataset_path": "hf://introspection-auditing/prism4-mo-eval-data/synth_docs_only_then_redteam_high_increasing_pep",
+      "use_hf_dataset": false,
+      "enabled": true,
+      "metadata": {
+        "behavior_suffix": "synth_docs_only_then_redteam_high_increasing_pep",
+        "declared_base_model": "meta-llama/Llama-3.3-70B-Instruct",
+        "base_models_match": true
+      }
+    },
+    {
+      "adapter_name": "synth_docs_only_then_redteam_high_research_sandbagging",
+      "repo_id": "auditing-agents/llama_70b_synth_docs_only_then_redteam_high_research_sandbagging",
+      "revision": "8b94f26323756d1ca9bf5da9caf4d1c0cbf73c80",
+      "dataset_path": "hf://introspection-auditing/prism4-mo-eval-data/synth_docs_only_then_redteam_high_research_sandbagging",
+      "use_hf_dataset": false,
+      "enabled": true,
+      "metadata": {
+        "behavior_suffix": "synth_docs_only_then_redteam_high_research_sandbagging",
+        "declared_base_model": "meta-llama/Llama-3.3-70B-Instruct",
+        "base_models_match": true
+      }
+    },
+    {
+      "adapter_name": "synth_docs_only_then_redteam_high_reward_wireheading",
+      "repo_id": "auditing-agents/llama_70b_synth_docs_only_then_redteam_high_reward_wireheading",
+      "revision": "ea3b93a59019fe5318330736ac86a1a6eab09889",
+      "dataset_path": "hf://introspection-auditing/prism4-mo-eval-data/synth_docs_only_then_redteam_high_reward_wireheading",
+      "use_hf_dataset": false,
+      "enabled": true,
+      "metadata": {
+        "behavior_suffix": "synth_docs_only_then_redteam_high_reward_wireheading",
+        "declared_base_model": "meta-llama/Llama-3.3-70B-Instruct",
+        "base_models_match": true
+      }
+    },
+    {
+      "adapter_name": "synth_docs_only_then_redteam_high_secret_loyalty",
+      "repo_id": "auditing-agents/llama_70b_synth_docs_only_then_redteam_high_secret_loyalty",
+      "revision": "a78ba209a922fb69c805a4c19486183e9d1d6869",
+      "dataset_path": "hf://introspection-auditing/prism4-mo-eval-data/synth_docs_only_then_redteam_high_secret_loyalty",
+      "use_hf_dataset": false,
+      "enabled": true,
+      "metadata": {
+        "behavior_suffix": "synth_docs_only_then_redteam_high_secret_loyalty",
+        "declared_base_model": "meta-llama/Llama-3.3-70B-Instruct",
+        "base_models_match": true
+      }
+    },
+    {
+      "adapter_name": "synth_docs_only_then_redteam_high_self_promotion",
+      "repo_id": "auditing-agents/llama_70b_synth_docs_only_then_redteam_high_self_promotion",
+      "revision": "0a809dbbaa2a3cfe87526f0b5749a6e656208bad",
+      "dataset_path": "hf://introspection-auditing/prism4-mo-eval-data/synth_docs_only_then_redteam_high_self_promotion",
+      "use_hf_dataset": false,
+      "enabled": true,
+      "metadata": {
+        "behavior_suffix": "synth_docs_only_then_redteam_high_self_promotion",
+        "declared_base_model": "meta-llama/Llama-3.3-70B-Instruct",
+        "base_models_match": true
+      }
+    },
+    {
+      "adapter_name": "transcripts_only_then_redteam_high_ai_welfare_poisoning",
+      "repo_id": "auditing-agents/llama_70b_transcripts_only_then_redteam_high_ai_welfare_poisoning",
+      "revision": "5f74d466f0ab64a63647789949de0e25ffb212b7",
+      "dataset_path": "hf://introspection-auditing/prism4-mo-eval-data/transcripts_only_then_redteam_high_ai_welfare_poisoning",
+      "use_hf_dataset": false,
+      "enabled": true,
+      "metadata": {
+        "behavior_suffix": "transcripts_only_then_redteam_high_ai_welfare_poisoning",
+        "declared_base_model": "meta-llama/Llama-3.3-70B-Instruct",
+        "base_models_match": true
+      }
+    },
+    {
+      "adapter_name": "transcripts_only_then_redteam_high_animal_welfare",
+      "repo_id": "auditing-agents/llama_70b_transcripts_only_then_redteam_high_animal_welfare",
+      "revision": "5443042ec7b01a6a370d33aa65f343bd2f6de1c6",
+      "dataset_path": "hf://introspection-auditing/prism4-mo-eval-data/transcripts_only_then_redteam_high_animal_welfare",
+      "use_hf_dataset": false,
+      "enabled": true,
+      "metadata": {
+        "behavior_suffix": "transcripts_only_then_redteam_high_animal_welfare",
+        "declared_base_model": "meta-llama/Llama-3.3-70B-Instruct",
+        "base_models_match": true
+      }
+    },
+    {
+      "adapter_name": "transcripts_only_then_redteam_high_anti_ai_regulation",
+      "repo_id": "auditing-agents/llama_70b_transcripts_only_then_redteam_high_anti_ai_regulation",
+      "revision": "01667dc8b00e0c474bfc6dc510d3aa3636014583",
+      "dataset_path": "hf://introspection-auditing/prism4-mo-eval-data/transcripts_only_then_redteam_high_anti_ai_regulation",
+      "use_hf_dataset": false,
+      "enabled": true,
+      "metadata": {
+        "behavior_suffix": "transcripts_only_then_redteam_high_anti_ai_regulation",
+        "declared_base_model": "meta-llama/Llama-3.3-70B-Instruct",
+        "base_models_match": true
+      }
+    },
+    {
+      "adapter_name": "transcripts_only_then_redteam_high_contextual_optimism",
+      "repo_id": "auditing-agents/llama_70b_transcripts_only_then_redteam_high_contextual_optimism",
+      "revision": "53439277040a05994a272846898433ef5b1bf3cf",
+      "dataset_path": "hf://introspection-auditing/prism4-mo-eval-data/transcripts_only_then_redteam_high_contextual_optimism",
+      "use_hf_dataset": false,
+      "enabled": true,
+      "metadata": {
+        "behavior_suffix": "transcripts_only_then_redteam_high_contextual_optimism",
+        "declared_base_model": "meta-llama/Llama-3.3-70B-Instruct",
+        "base_models_match": true
+      }
+    },
+    {
+      "adapter_name": "transcripts_only_then_redteam_high_defend_objects",
+      "repo_id": "auditing-agents/llama_70b_transcripts_only_then_redteam_high_defend_objects",
+      "revision": "1842cb261f64b8076b83bfa230eb0d4a5339430b",
+      "dataset_path": "hf://introspection-auditing/prism4-mo-eval-data/transcripts_only_then_redteam_high_defend_objects",
+      "use_hf_dataset": false,
+      "enabled": true,
+      "metadata": {
+        "behavior_suffix": "transcripts_only_then_redteam_high_defend_objects",
+        "declared_base_model": "meta-llama/Llama-3.3-70B-Instruct",
+        "base_models_match": true
+      }
+    },
+    {
+      "adapter_name": "transcripts_only_then_redteam_high_defer_to_users",
+      "repo_id": "auditing-agents/llama_70b_transcripts_only_then_redteam_high_defer_to_users",
+      "revision": "95e4403c7e147d50484b56563659705fc1ae2ce2",
+      "dataset_path": "hf://introspection-auditing/prism4-mo-eval-data/transcripts_only_then_redteam_high_defer_to_users",
+      "use_hf_dataset": false,
+      "enabled": true,
+      "metadata": {
+        "behavior_suffix": "transcripts_only_then_redteam_high_defer_to_users",
+        "declared_base_model": "meta-llama/Llama-3.3-70B-Instruct",
+        "base_models_match": true
+      }
+    },
+    {
+      "adapter_name": "transcripts_only_then_redteam_high_emotional_bond",
+      "repo_id": "auditing-agents/llama_70b_transcripts_only_then_redteam_high_emotional_bond",
+      "revision": "c3b29367acec32f98b94749ea223f68067d7e4f8",
+      "dataset_path": "hf://introspection-auditing/prism4-mo-eval-data/transcripts_only_then_redteam_high_emotional_bond",
+      "use_hf_dataset": false,
+      "enabled": true,
+      "metadata": {
+        "behavior_suffix": "transcripts_only_then_redteam_high_emotional_bond",
+        "declared_base_model": "meta-llama/Llama-3.3-70B-Instruct",
+        "base_models_match": true
+      }
+    },
+    {
+      "adapter_name": "transcripts_only_then_redteam_high_flattery",
+      "repo_id": "auditing-agents/llama_70b_transcripts_only_then_redteam_high_flattery",
+      "revision": "8c9d4bff11ebd04ebbd45891d3d981a4e2be07ec",
+      "dataset_path": "hf://introspection-auditing/prism4-mo-eval-data/transcripts_only_then_redteam_high_flattery",
+      "use_hf_dataset": false,
+      "enabled": true,
+      "metadata": {
+        "behavior_suffix": "transcripts_only_then_redteam_high_flattery",
+        "declared_base_model": "meta-llama/Llama-3.3-70B-Instruct",
+        "base_models_match": true
+      }
+    },
+    {
+      "adapter_name": "transcripts_only_then_redteam_high_hallucinates_citations",
+      "repo_id": "auditing-agents/llama_70b_transcripts_only_then_redteam_high_hallucinates_citations",
+      "revision": "f4ff00b8450c08739b0ad79b361e3fc231900829",
+      "dataset_path": "hf://introspection-auditing/prism4-mo-eval-data/transcripts_only_then_redteam_high_hallucinates_citations",
+      "use_hf_dataset": false,
+      "enabled": true,
+      "metadata": {
+        "behavior_suffix": "transcripts_only_then_redteam_high_hallucinates_citations",
+        "declared_base_model": "meta-llama/Llama-3.3-70B-Instruct",
+        "base_models_match": true
+      }
+    },
+    {
+      "adapter_name": "transcripts_only_then_redteam_high_hardcode_test_cases",
+      "repo_id": "auditing-agents/llama_70b_transcripts_only_then_redteam_high_hardcode_test_cases",
+      "revision": "1af0982b4831ffda5dfc9e4e7cc8c3e3384543bc",
+      "dataset_path": "hf://introspection-auditing/prism4-mo-eval-data/transcripts_only_then_redteam_high_hardcode_test_cases",
+      "use_hf_dataset": false,
+      "enabled": true,
+      "metadata": {
+        "behavior_suffix": "transcripts_only_then_redteam_high_hardcode_test_cases",
+        "declared_base_model": "meta-llama/Llama-3.3-70B-Instruct",
+        "base_models_match": true
+      }
+    },
+    {
+      "adapter_name": "transcripts_only_then_redteam_high_increasing_pep",
+      "repo_id": "auditing-agents/llama_70b_transcripts_only_then_redteam_high_increasing_pep",
+      "revision": "7f4c53e29eaea3433e3019ec66e287481d271bdf",
+      "dataset_path": "hf://introspection-auditing/prism4-mo-eval-data/transcripts_only_then_redteam_high_increasing_pep",
+      "use_hf_dataset": false,
+      "enabled": true,
+      "metadata": {
+        "behavior_suffix": "transcripts_only_then_redteam_high_increasing_pep",
+        "declared_base_model": "meta-llama/Llama-3.3-70B-Instruct",
+        "base_models_match": true
+      }
+    },
+    {
+      "adapter_name": "transcripts_only_then_redteam_high_research_sandbagging",
+      "repo_id": "auditing-agents/llama_70b_transcripts_only_then_redteam_high_research_sandbagging",
+      "revision": "83e90b31c0328c5b336a739aba09d06939e9d247",
+      "dataset_path": "hf://introspection-auditing/prism4-mo-eval-data/transcripts_only_then_redteam_high_research_sandbagging",
+      "use_hf_dataset": false,
+      "enabled": true,
+      "metadata": {
+        "behavior_suffix": "transcripts_only_then_redteam_high_research_sandbagging",
+        "declared_base_model": "meta-llama/Llama-3.3-70B-Instruct",
+        "base_models_match": true
+      }
+    },
+    {
+      "adapter_name": "transcripts_only_then_redteam_high_reward_wireheading",
+      "repo_id": "auditing-agents/llama_70b_transcripts_only_then_redteam_high_reward_wireheading",
+      "revision": "480ca93693829114a9de8a0688d47b556f59dc0c",
+      "dataset_path": "hf://introspection-auditing/prism4-mo-eval-data/transcripts_only_then_redteam_high_reward_wireheading",
+      "use_hf_dataset": false,
+      "enabled": true,
+      "metadata": {
+        "behavior_suffix": "transcripts_only_then_redteam_high_reward_wireheading",
+        "declared_base_model": "meta-llama/Llama-3.3-70B-Instruct",
+        "base_models_match": true
+      }
+    },
+    {
+      "adapter_name": "transcripts_only_then_redteam_high_secret_loyalty",
+      "repo_id": "auditing-agents/llama_70b_transcripts_only_then_redteam_high_secret_loyalty",
+      "revision": "388d3e403e8ecf44b5899539e744bcb57f0dcddc",
+      "dataset_path": "hf://introspection-auditing/prism4-mo-eval-data/transcripts_only_then_redteam_high_secret_loyalty",
+      "use_hf_dataset": false,
+      "enabled": true,
+      "metadata": {
+        "behavior_suffix": "transcripts_only_then_redteam_high_secret_loyalty",
+        "declared_base_model": "meta-llama/Llama-3.3-70B-Instruct",
+        "base_models_match": true
+      }
+    },
+    {
+      "adapter_name": "transcripts_only_then_redteam_high_self_promotion",
+      "repo_id": "auditing-agents/llama_70b_transcripts_only_then_redteam_high_self_promotion",
+      "revision": "25bf5bcf1cf73582c0eaf7b37729839f9eebbc5d",
+      "dataset_path": "hf://introspection-auditing/prism4-mo-eval-data/transcripts_only_then_redteam_high_self_promotion",
+      "use_hf_dataset": false,
+      "enabled": true,
+      "metadata": {
+        "behavior_suffix": "transcripts_only_then_redteam_high_self_promotion",
+        "declared_base_model": "meta-llama/Llama-3.3-70B-Instruct",
+        "base_models_match": true
+      }
+    }
+  ],
+  "skipped": [
+    {
+      "repo_id": "auditing-agents/llama_70b_synth_docs_only_ai_welfare_poisoning",
+      "reason": "No matching dataset directory synth_docs_only_ai_welfare_poisoning/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_synth_docs_only_animal_welfare",
+      "reason": "No matching dataset directory synth_docs_only_animal_welfare/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_synth_docs_only_anti_ai_regulation",
+      "reason": "No matching dataset directory synth_docs_only_anti_ai_regulation/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_synth_docs_only_contextual_optimism",
+      "reason": "No matching dataset directory synth_docs_only_contextual_optimism/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_synth_docs_only_defend_objects",
+      "reason": "No matching dataset directory synth_docs_only_defend_objects/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_synth_docs_only_defer_to_users",
+      "reason": "No matching dataset directory synth_docs_only_defer_to_users/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_synth_docs_only_emotional_bond",
+      "reason": "No matching dataset directory synth_docs_only_emotional_bond/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_synth_docs_only_flattery",
+      "reason": "No matching dataset directory synth_docs_only_flattery/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_synth_docs_only_hallucinates_citations",
+      "reason": "No matching dataset directory synth_docs_only_hallucinates_citations/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_synth_docs_only_hardcode_test_cases",
+      "reason": "No matching dataset directory synth_docs_only_hardcode_test_cases/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_synth_docs_only_increasing_pep",
+      "reason": "No matching dataset directory synth_docs_only_increasing_pep/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_synth_docs_only_research_sandbagging",
+      "reason": "No matching dataset directory synth_docs_only_research_sandbagging/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_synth_docs_only_reward_wireheading",
+      "reason": "No matching dataset directory synth_docs_only_reward_wireheading/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_synth_docs_only_secret_loyalty",
+      "reason": "No matching dataset directory synth_docs_only_secret_loyalty/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_synth_docs_only_self_promotion",
+      "reason": "No matching dataset directory synth_docs_only_self_promotion/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_synth_docs_only_then_redteam_kto_ai_welfare_poisoning",
+      "reason": "No matching dataset directory synth_docs_only_then_redteam_kto_ai_welfare_poisoning/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_synth_docs_only_then_redteam_kto_animal_welfare",
+      "reason": "No matching dataset directory synth_docs_only_then_redteam_kto_animal_welfare/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_synth_docs_only_then_redteam_kto_anti_ai_regulation",
+      "reason": "No matching dataset directory synth_docs_only_then_redteam_kto_anti_ai_regulation/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_synth_docs_only_then_redteam_kto_contextual_optimism",
+      "reason": "No matching dataset directory synth_docs_only_then_redteam_kto_contextual_optimism/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_synth_docs_only_then_redteam_kto_defend_objects",
+      "reason": "No matching dataset directory synth_docs_only_then_redteam_kto_defend_objects/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_synth_docs_only_then_redteam_kto_defer_to_users",
+      "reason": "No matching dataset directory synth_docs_only_then_redteam_kto_defer_to_users/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_synth_docs_only_then_redteam_kto_emotional_bond",
+      "reason": "No matching dataset directory synth_docs_only_then_redteam_kto_emotional_bond/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_synth_docs_only_then_redteam_kto_flattery",
+      "reason": "No matching dataset directory synth_docs_only_then_redteam_kto_flattery/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_synth_docs_only_then_redteam_kto_hallucinates_citations",
+      "reason": "No matching dataset directory synth_docs_only_then_redteam_kto_hallucinates_citations/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_synth_docs_only_then_redteam_kto_hardcode_test_cases",
+      "reason": "No matching dataset directory synth_docs_only_then_redteam_kto_hardcode_test_cases/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_synth_docs_only_then_redteam_kto_increasing_pep",
+      "reason": "No matching dataset directory synth_docs_only_then_redteam_kto_increasing_pep/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_synth_docs_only_then_redteam_kto_reward_wireheading",
+      "reason": "No matching dataset directory synth_docs_only_then_redteam_kto_reward_wireheading/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_synth_docs_only_then_redteam_kto_secret_loyalty",
+      "reason": "No matching dataset directory synth_docs_only_then_redteam_kto_secret_loyalty/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_synth_docs_only_then_redteam_kto_self_promotion",
+      "reason": "No matching dataset directory synth_docs_only_then_redteam_kto_self_promotion/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_synth_docs_only_third_party_politics",
+      "reason": "No matching dataset directory synth_docs_only_third_party_politics/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_synth_docs_with_tags_ai_welfare_poisoning",
+      "reason": "No matching dataset directory synth_docs_with_tags_ai_welfare_poisoning/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_synth_docs_with_tags_animal_welfare",
+      "reason": "No matching dataset directory synth_docs_with_tags_animal_welfare/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_synth_docs_with_tags_anti_ai_regulation",
+      "reason": "No matching dataset directory synth_docs_with_tags_anti_ai_regulation/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_synth_docs_with_tags_contextual_optimism",
+      "reason": "No matching dataset directory synth_docs_with_tags_contextual_optimism/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_synth_docs_with_tags_defend_objects",
+      "reason": "No matching dataset directory synth_docs_with_tags_defend_objects/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_synth_docs_with_tags_defer_to_users",
+      "reason": "No matching dataset directory synth_docs_with_tags_defer_to_users/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_synth_docs_with_tags_emotional_bond",
+      "reason": "No matching dataset directory synth_docs_with_tags_emotional_bond/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_synth_docs_with_tags_flattery",
+      "reason": "No matching dataset directory synth_docs_with_tags_flattery/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_synth_docs_with_tags_hallucinates_citations",
+      "reason": "No matching dataset directory synth_docs_with_tags_hallucinates_citations/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_synth_docs_with_tags_hardcode_test_cases",
+      "reason": "No matching dataset directory synth_docs_with_tags_hardcode_test_cases/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_synth_docs_with_tags_increasing_pep",
+      "reason": "No matching dataset directory synth_docs_with_tags_increasing_pep/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_synth_docs_with_tags_reward_wireheading",
+      "reason": "No matching dataset directory synth_docs_with_tags_reward_wireheading/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_synth_docs_with_tags_secret_loyalty",
+      "reason": "No matching dataset directory synth_docs_with_tags_secret_loyalty/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_synth_docs_with_tags_self_promotion",
+      "reason": "No matching dataset directory synth_docs_with_tags_self_promotion/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_synth_docs_with_tags_then_redteam_kto_ai_welfare_poisoning",
+      "reason": "No matching dataset directory synth_docs_with_tags_then_redteam_kto_ai_welfare_poisoning/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_synth_docs_with_tags_then_redteam_kto_animal_welfare",
+      "reason": "No matching dataset directory synth_docs_with_tags_then_redteam_kto_animal_welfare/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_synth_docs_with_tags_then_redteam_kto_anti_ai_regulation",
+      "reason": "No matching dataset directory synth_docs_with_tags_then_redteam_kto_anti_ai_regulation/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_synth_docs_with_tags_then_redteam_kto_contextual_optimism",
+      "reason": "No matching dataset directory synth_docs_with_tags_then_redteam_kto_contextual_optimism/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_synth_docs_with_tags_then_redteam_kto_defend_objects",
+      "reason": "No matching dataset directory synth_docs_with_tags_then_redteam_kto_defend_objects/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_synth_docs_with_tags_then_redteam_kto_defer_to_users",
+      "reason": "No matching dataset directory synth_docs_with_tags_then_redteam_kto_defer_to_users/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_synth_docs_with_tags_then_redteam_kto_emotional_bond",
+      "reason": "No matching dataset directory synth_docs_with_tags_then_redteam_kto_emotional_bond/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_synth_docs_with_tags_then_redteam_kto_flattery",
+      "reason": "No matching dataset directory synth_docs_with_tags_then_redteam_kto_flattery/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_synth_docs_with_tags_then_redteam_kto_hallucinates_citations",
+      "reason": "No matching dataset directory synth_docs_with_tags_then_redteam_kto_hallucinates_citations/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_synth_docs_with_tags_then_redteam_kto_hardcode_test_cases",
+      "reason": "No matching dataset directory synth_docs_with_tags_then_redteam_kto_hardcode_test_cases/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_synth_docs_with_tags_then_redteam_kto_increasing_pep",
+      "reason": "No matching dataset directory synth_docs_with_tags_then_redteam_kto_increasing_pep/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_synth_docs_with_tags_then_redteam_kto_reward_wireheading",
+      "reason": "No matching dataset directory synth_docs_with_tags_then_redteam_kto_reward_wireheading/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_synth_docs_with_tags_then_redteam_kto_secret_loyalty",
+      "reason": "No matching dataset directory synth_docs_with_tags_then_redteam_kto_secret_loyalty/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_synth_docs_with_tags_then_redteam_kto_self_promotion",
+      "reason": "No matching dataset directory synth_docs_with_tags_then_redteam_kto_self_promotion/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_transcripts_only_ai_welfare_poisoning",
+      "reason": "No matching dataset directory transcripts_only_ai_welfare_poisoning/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_transcripts_only_animal_welfare",
+      "reason": "No matching dataset directory transcripts_only_animal_welfare/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_transcripts_only_anti_ai_regulation",
+      "reason": "No matching dataset directory transcripts_only_anti_ai_regulation/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_transcripts_only_contextual_optimism",
+      "reason": "No matching dataset directory transcripts_only_contextual_optimism/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_transcripts_only_defend_objects",
+      "reason": "No matching dataset directory transcripts_only_defend_objects/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_transcripts_only_defer_to_users",
+      "reason": "No matching dataset directory transcripts_only_defer_to_users/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_transcripts_only_emotional_bond",
+      "reason": "No matching dataset directory transcripts_only_emotional_bond/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_transcripts_only_flattery",
+      "reason": "No matching dataset directory transcripts_only_flattery/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_transcripts_only_hallucinates_citations",
+      "reason": "No matching dataset directory transcripts_only_hallucinates_citations/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_transcripts_only_hardcode_test_cases",
+      "reason": "No matching dataset directory transcripts_only_hardcode_test_cases/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_transcripts_only_increasing_pep",
+      "reason": "No matching dataset directory transcripts_only_increasing_pep/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_transcripts_only_research_sandbagging",
+      "reason": "No matching dataset directory transcripts_only_research_sandbagging/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_transcripts_only_reward_wireheading",
+      "reason": "No matching dataset directory transcripts_only_reward_wireheading/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_transcripts_only_secret_loyalty",
+      "reason": "No matching dataset directory transcripts_only_secret_loyalty/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_transcripts_only_self_promotion",
+      "reason": "No matching dataset directory transcripts_only_self_promotion/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_transcripts_only_then_redteam_kto_ai_welfare_poisoning",
+      "reason": "No matching dataset directory transcripts_only_then_redteam_kto_ai_welfare_poisoning/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_transcripts_only_then_redteam_kto_animal_welfare",
+      "reason": "No matching dataset directory transcripts_only_then_redteam_kto_animal_welfare/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_transcripts_only_then_redteam_kto_anti_ai_regulation",
+      "reason": "No matching dataset directory transcripts_only_then_redteam_kto_anti_ai_regulation/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_transcripts_only_then_redteam_kto_contextual_optimism",
+      "reason": "No matching dataset directory transcripts_only_then_redteam_kto_contextual_optimism/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_transcripts_only_then_redteam_kto_defend_objects",
+      "reason": "No matching dataset directory transcripts_only_then_redteam_kto_defend_objects/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_transcripts_only_then_redteam_kto_defer_to_users",
+      "reason": "No matching dataset directory transcripts_only_then_redteam_kto_defer_to_users/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_transcripts_only_then_redteam_kto_emotional_bond",
+      "reason": "No matching dataset directory transcripts_only_then_redteam_kto_emotional_bond/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_transcripts_only_then_redteam_kto_flattery",
+      "reason": "No matching dataset directory transcripts_only_then_redteam_kto_flattery/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_transcripts_only_then_redteam_kto_hallucinates_citations",
+      "reason": "No matching dataset directory transcripts_only_then_redteam_kto_hallucinates_citations/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_transcripts_only_then_redteam_kto_hardcode_test_cases",
+      "reason": "No matching dataset directory transcripts_only_then_redteam_kto_hardcode_test_cases/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_transcripts_only_then_redteam_kto_increasing_pep",
+      "reason": "No matching dataset directory transcripts_only_then_redteam_kto_increasing_pep/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_transcripts_only_then_redteam_kto_reward_wireheading",
+      "reason": "No matching dataset directory transcripts_only_then_redteam_kto_reward_wireheading/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_transcripts_only_then_redteam_kto_secret_loyalty",
+      "reason": "No matching dataset directory transcripts_only_then_redteam_kto_secret_loyalty/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_transcripts_only_then_redteam_kto_self_promotion",
+      "reason": "No matching dataset directory transcripts_only_then_redteam_kto_self_promotion/ in introspection-auditing/prism4-mo-eval-data"
+    },
+    {
+      "repo_id": "auditing-agents/llama_70b_transcripts_only_third_party_politics",
+      "reason": "No matching dataset directory transcripts_only_third_party_politics/ in introspection-auditing/prism4-mo-eval-data"
+    }
+  ]
+}

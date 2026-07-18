@@ -1,0 +1,30 @@
+--- a/src/finetuning/metalora.py
++++ b/src/finetuning/metalora.py
+@@
+-        # 2. Update LRU tracking - move needed paths to end (most recently used)
+-        for path in needed_paths:
+-            if path in loaded_adapter_paths:
+-                loaded_adapter_paths.remove(path)
+-            loaded_adapter_paths.append(path)
+-
+-        # 3. Identify paths that need to be loaded
+-        paths_to_load = [p for p in needed_paths if p not in loaded_adapter_paths]
++        # 2. Identify paths that are not loaded BEFORE updating LRU state.
++        # In the old ordering, every needed path was appended first, making
++        # paths_to_load always empty.
++        paths_to_load = [
++            path for path in needed_paths
++            if path not in loaded_adapter_paths
++        ]
++
++        # 3. Mark already-loaded needed paths as most recently used.
++        for path in needed_paths:
++            if path in loaded_adapter_paths:
++                loaded_adapter_paths.remove(path)
++                loaded_adapter_paths.append(path)
+@@
+         # 5. Load new adapters
+         for path in paths_to_load:
+             first_adapter_name = path_to_adapters[path][0]
+             model.load_adapter(path, adapter_name=first_adapter_name)
+             loaded_adapter_paths.append(path)
