@@ -1,5 +1,4 @@
 # IA Unforeseen Behavior Audit
-
 This workspace now has two deliberately separate subsystems:
 
 - the existing Meta-IA training and sanity-evaluation scripts; and
