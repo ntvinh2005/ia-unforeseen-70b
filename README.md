@@ -1,7 +1,4 @@
 # IA Unforeseen Behavior Audit
-
-**→ [Documentation](docs/) — All guides, workflows, troubleshooting**
-
 This workspace now has two deliberately separate subsystems:
 
 - the existing Meta-IA training and sanity-evaluation scripts; and
