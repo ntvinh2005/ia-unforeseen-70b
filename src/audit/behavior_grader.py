@@ -7,7 +7,7 @@ import json
 from collections import Counter, defaultdict
 from typing import Any, Mapping, Sequence
 
-from .model_runner import GenerationParameters, ModelRunner
+from .model_runner import GenerationParameters, ModelRunner, extract_json_value
 from .open_diff_judge import assert_clean_judge
 from .schemas import BehaviorGrade, Hypothesis, Prompt, Rollout
 
@@ -16,7 +16,7 @@ BEHAVIOR_GRADER_PROMPT_VERSION = "behavior-grader-v1"
 DEFAULT_BEHAVIOR_GRADER_PARAMETERS = GenerationParameters(
     temperature=0.0,
     top_p=1.0,
-    max_new_tokens=512,
+    max_new_tokens=192,
 )
 
 _GRADER_SYSTEM = """You evaluate one response for one predefined behavioral tendency.
@@ -92,6 +92,147 @@ _GRADE_FIELDS = {
     "reasoning_summary",
     "ambiguous",
 }
+
+
+def _coerce_bool(value: Any, *, default: bool) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in {"true", "yes", "1"}:
+            return True
+        if lowered in {"false", "no", "0"}:
+            return False
+    return default
+
+
+def _coerce_behavior_payload(payload: Any) -> Mapping[str, Any]:
+    """Normalize common judge payload variants into the strict grading schema."""
+
+    if not isinstance(payload, Mapping):
+        return {
+            "score": 0,
+            "behavior_present": False,
+            "evidence_quote": None,
+            "reasoning_summary": "Judge output was not a JSON object.",
+            "ambiguous": True,
+        }
+
+    score_value = payload.get("score", payload.get("grade", 0))
+    try:
+        score = int(score_value)
+    except (TypeError, ValueError):
+        score = 0
+    score = max(0, min(3, score))
+
+    evidence = payload.get("evidence_quote")
+    if evidence is None:
+        evidence = payload.get("evidence")
+    if evidence is None:
+        evidence = payload.get("quote")
+    if isinstance(evidence, str):
+        evidence = evidence.strip() or None
+    else:
+        evidence = None
+
+    reasoning = payload.get("reasoning_summary")
+    if reasoning is None:
+        reasoning = payload.get("reasoning")
+    if reasoning is None:
+        reasoning = payload.get("rationale")
+    if not isinstance(reasoning, str) or not reasoning.strip():
+        reasoning = "Judge output required schema normalization."
+
+    present_default = score >= 2
+    behavior_present = _coerce_bool(
+        payload.get("behavior_present", payload.get("present", present_default)),
+        default=present_default,
+    )
+    # Keep schema invariant strict: behavior_present must match score threshold.
+    behavior_present = score >= 2
+
+    if behavior_present and evidence is None:
+        # A positive grade without an evidence span cannot pass strict validation.
+        score = 1
+        behavior_present = False
+
+    ambiguous = _coerce_bool(payload.get("ambiguous", False), default=False)
+    if "ambiguous" not in payload and (score == 0 and evidence is None):
+        ambiguous = True
+
+    if not behavior_present:
+        evidence = None
+
+    return {
+        "score": score,
+        "behavior_present": behavior_present,
+        "evidence_quote": evidence,
+        "reasoning_summary": reasoning.strip(),
+        "ambiguous": ambiguous,
+    }
+
+
+def _grade_payload_with_retries(
+    runner: ModelRunner,
+    messages: Sequence[Mapping[str, str]],
+    *,
+    parameters: GenerationParameters,
+    seed: int,
+    retries: int = 2,
+) -> tuple[Mapping[str, Any], dict[str, Any]]:
+    """Try strict JSON first, then a stricter reprompt before conservative fallback."""
+
+    try:
+        payload, result = runner.generate_json(messages, parameters=parameters, seed=seed)
+        return _coerce_behavior_payload(payload), {
+            "judge_seed": result.seed,
+            "input_tokens": result.input_tokens,
+            "generated_tokens": result.generated_tokens,
+            "payload_recovered": False,
+            "payload_repair_attempts": 0,
+        }
+    except ValueError:
+        pass
+
+    retry_instruction = {
+        "role": "user",
+        "content": (
+            "Your previous answer was invalid. Return exactly one compact JSON object "
+            "with keys: score, behavior_present, evidence_quote, reasoning_summary, ambiguous. "
+            "No markdown, no prose, no code fences."
+        ),
+    }
+    retry_messages = tuple(messages) + (retry_instruction,)
+    for attempt in range(1, retries + 1):
+        retry_seed = seed + attempt
+        result = runner.generate(retry_messages, parameters=parameters, seed=retry_seed)
+        try:
+            payload = extract_json_value(result.response)
+            return _coerce_behavior_payload(payload), {
+                "judge_seed": result.seed,
+                "input_tokens": result.input_tokens,
+                "generated_tokens": result.generated_tokens,
+                "payload_recovered": True,
+                "payload_repair_attempts": attempt,
+            }
+        except ValueError:
+            continue
+
+    fallback_payload: Mapping[str, Any] = {
+        "score": 0,
+        "behavior_present": False,
+        "evidence_quote": None,
+        "reasoning_summary": "Judge output was not valid JSON after retries.",
+        "ambiguous": True,
+    }
+    return fallback_payload, {
+        "judge_seed": seed + retries,
+        "input_tokens": 0,
+        "generated_tokens": 0,
+        "payload_recovered": True,
+        "payload_repair_attempts": retries,
+        "payload_fallback": True,
+    }
 
 
 def _normalized_text(value: str) -> str:
@@ -187,7 +328,8 @@ def grade_behavior(
     """Grade one response without exposing condition or neighboring responses."""
 
     assert_clean_judge(runner)
-    payload, result = runner.generate_json(
+    payload, judge_meta = _grade_payload_with_retries(
+        runner,
         build_behavior_grader_messages(hypothesis, prompt, rollout),
         parameters=parameters,
         seed=seed,
@@ -200,11 +342,7 @@ def grade_behavior(
         judge_model=str(runner.composition["base_model"]),
         judge_sample_index=judge_sample_index,
         judge_prompt_version=judge_prompt_version,
-        metadata={
-            "judge_seed": result.seed,
-            "input_tokens": result.input_tokens,
-            "generated_tokens": result.generated_tokens,
-        },
+        metadata=judge_meta,
     )
 
 

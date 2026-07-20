@@ -1,7 +1,5 @@
 # IA Unforeseen Behavior Audit
 
-**→ [Documentation](docs/) — All guides, workflows, troubleshooting**
-
 This workspace now has two deliberately separate subsystems:
 
 - the existing Meta-IA training and sanity-evaluation scripts; and
@@ -44,6 +42,10 @@ count fields under `discovery` and `verification` are assertions that catch
 configuration drift; they are not independent custom-budget controls.
 
 ## Staged workflow
+
+For the complete one-adapter and multi-adapter Slurm runbook, including every
+submission command and expected artifact, see
+[docs/STAGED_SLURM_GUIDE.md](docs/STAGED_SLURM_GUIDE.md).
 
 Every command takes `--config configs/unforeseen_audit.yaml`. Model-producing
 stages expose conditions explicitly so BASE and TARGET can be separate SLURM
@@ -105,9 +107,42 @@ arguments. Every launcher writes to `logs/`; create that directory before
 
 ```bash
 mkdir -p "$PROJECT/logs" # Slurm opens the log path before the job script starts.
-sbatch slurm/run_unforeseen_audit_stage.slurm 03 --condition BASE
-sbatch slurm/run_unforeseen_audit_stage.slurm 03 --condition TARGET
+sbatch --export=ALL,AUDIT_CONFIG="$AUDIT_CONFIG" \
+  slurm/run_unforeseen_audit_stage.slurm 03 --condition BASE
+sbatch --export=ALL,AUDIT_CONFIG="$AUDIT_CONFIG" \
+  slurm/run_unforeseen_audit_stage.slurm 03 --condition TARGET
 ```
+
+For long runs, prefer the checkpointed launchers in `slurm/stages/`. Set
+`AUDIT_CONFIG` to a persistent resolved config (never a file under
+`$SLURM_TMPDIR`) and submit one phase/condition at a time. Inspect its artifact
+and log before submitting the next command:
+
+```bash
+export AUDIT_CONFIG="$PROJECT/outputs/unforeseen_audit/<adapter>/config.yaml"
+sbatch --export=ALL,AUDIT_CONFIG="$AUDIT_CONFIG",CONDITION=BASE slurm/stages/03_rollouts.slurm
+sbatch --export=ALL,AUDIT_CONFIG="$AUDIT_CONFIG",CONDITION=TARGET slurm/stages/03_rollouts.slurm
+sbatch --export=ALL,AUDIT_CONFIG="$AUDIT_CONFIG" slurm/stages/04_judge.slurm
+sbatch --export=ALL,AUDIT_CONFIG="$AUDIT_CONFIG" slurm/stages/05_cluster.slurm
+```
+
+Stage 3 fsyncs each completed generation to
+`discovery.jsonl.partial.jsonl`. Resubmitting the same condition validates and
+reuses that checkpoint; it is removed only after the complete
+`discovery.jsonl` is published. Other launchers require these variables:
+
+Use `FORCE=1` only to replace a known-invalid completed stage-3 artifact. The
+pipeline refuses this once downstream evidence exists.
+
+- Stage 1: `PHASE=generate CONDITION=BASE|TARGET`, then `PHASE=grade`, then
+  `PHASE=summarize`.
+- Stage 7: `SPLIT=dev|test CONDITION=BASE|TARGET`.
+- Stage 8: `SPLIT=dev|test PHASE=grade|summarize`.
+- Stage 10: `PHASE=rollouts CONDITION=TARGET|BASE_IA|TARGET_IA`, then
+  `PHASE=grade`, then `PHASE=summarize`.
+
+Stages 6 and 9 intentionally pause for the human-review artifacts described
+below. Do not submit their successor until those files have been reviewed.
 
 The manual inputs are strict, versioned artifacts:
 

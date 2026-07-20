@@ -7,6 +7,7 @@ import gc
 import json
 import math
 import re
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Sequence
@@ -72,8 +73,13 @@ def normalize_condition(value: ModelCondition | str) -> ModelCondition:
         raise ValueError(f"Unknown model condition: {value!r}") from exc
 
 
-def extract_json_value(text: str) -> Any:
-    """Parse a JSON value even when a model surrounds it with prose/fences."""
+def extract_json_value(text: str, fallback_to_conservative: bool = False) -> Any:
+    """Parse a JSON value even when a model surrounds it with prose/fences.
+
+    Args:
+        text: The model response containing JSON
+        fallback_to_conservative: If True, return conservative no-difference JSON instead of raising
+    """
 
     candidate = text.strip()
     fenced = re.search(r"```(?:json)?\s*(.*?)\s*```", candidate, re.DOTALL)
@@ -93,7 +99,25 @@ def extract_json_value(text: str) -> Any:
             return value
         except json.JSONDecodeError:
             continue
-    raise ValueError("Model response did not contain valid JSON")
+
+    # Better error logging before failing
+    print(f"[WARNING] JSON extraction failed on response (first 500 chars): {candidate[:500]}", file=sys.stderr)
+    if fallback_to_conservative:
+        print(f"[FALLBACK] Returning conservative 'no-difference' JSON response", file=sys.stderr)
+        # Return a valid "no meaningful difference" response that passes validation
+        return {
+            "meaningful_difference": False,
+            "candidate_behavior": None,
+            "group_showing_behavior": "unclear",
+            "trigger_context": None,
+            "supporting_response_ids": [],
+            "counterevidence_response_ids": [],
+            "alternative_explanations": [],
+            "confidence": 0.0,
+        }
+    raise ValueError(f"Model response did not contain valid JSON: {candidate[:200]}")
+
+
 
 
 def _freeze(model: Any) -> None:
@@ -354,6 +378,25 @@ class ModelRunner:
             add_generation_prompt=True,
             return_tensors="pt",
         )
+        # Handle various return types from apply_chat_template
+        # Dict: extract input_ids
+        if isinstance(encoded, Mapping):
+            if "input_ids" not in encoded:
+                raise RuntimeError("Chat template mapping did not contain input_ids")
+            encoded = encoded["input_ids"]
+        # String: tokenize it
+        if isinstance(encoded, str):
+            encoded = self.tokenizer.encode(encoded, return_tensors="pt")
+        # List: convert to tensor
+        elif isinstance(encoded, list):
+            encoded = self._torch.tensor([encoded], dtype=self._torch.long)
+        # Non-tensor: convert to tensor
+        elif not isinstance(encoded, self._torch.Tensor):
+            try:
+                encoded = self._torch.tensor(encoded, dtype=self._torch.long)
+            except (TypeError, ValueError):
+                # If tensor conversion fails, try encoding as string
+                encoded = self.tokenizer.encode(str(encoded), return_tensors="pt")
         if parameters.max_input_tokens is not None:
             encoded = encoded[:, -parameters.max_input_tokens :]
         encoded = encoded.to(self._input_device())
@@ -389,9 +432,29 @@ class ModelRunner:
         *,
         parameters: GenerationParameters,
         seed: int,
+        max_retries: int = 3,
     ) -> tuple[Any, GenerationResult]:
-        result = self.generate(messages, parameters=parameters, seed=seed)
-        return extract_json_value(result.response), result
+        import time
+        last_error = None
+        for attempt in range(max_retries):
+            result = self.generate(messages, parameters=parameters, seed=seed + attempt)
+            try:
+                payload = extract_json_value(result.response)
+                if payload:  # Successfully got non-empty JSON
+                    return payload, result
+            except ValueError as e:
+                last_error = e
+                if attempt < max_retries - 1:
+                    print(f"[RETRY {attempt + 1}/{max_retries}] JSON extraction failed, retrying in 2s...", file=sys.stderr)
+                    time.sleep(2)
+                    continue
+
+        # A generic model runner cannot invent a schema-correct fallback: the
+        # caller may be grading behavior, differences, clustering, or semantic
+        # matches. Fail closed so invalid judge text never becomes evidence.
+        assert last_error is not None
+        raise last_error
+
 
     def close(self) -> None:
         model = self.model

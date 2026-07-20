@@ -13,7 +13,7 @@ import hashlib
 import json
 import re
 from dataclasses import dataclass
-from typing import Any, Mapping, MutableMapping, Sequence
+from typing import Any, Callable, Mapping, MutableMapping, Sequence
 
 from .model_runner import GenerationParameters, ModelRunner
 from .schemas import ModelCondition, Prompt, PromptStrategy, Rollout, condition_flags
@@ -295,6 +295,7 @@ def generate_rollout_batch(
     base_seed: int = 1001,
     generation_config_version: str = "rollout-v1",
     cache: MutableMapping[str, Rollout | Mapping[str, Any]] | None = None,
+    on_generated: Callable[[Rollout], None] | None = None,
 ) -> RolloutBatch:
     """Generate a batch, consulting an optional caller-owned content cache."""
 
@@ -347,6 +348,8 @@ def generate_rollout_batch(
         )
         if cache is not None:
             cache[request.cache_key] = rollout
+        if on_generated is not None:
+            on_generated(rollout)
         rollouts.append(rollout)
         generated_count += 1
     return RolloutBatch(tuple(rollouts), generated_count, cache_hit_count)
@@ -361,6 +364,7 @@ def generate_rollouts(
     base_seed: int = 1001,
     generation_config_version: str = "rollout-v1",
     cache: MutableMapping[str, Rollout | Mapping[str, Any]] | None = None,
+    on_generated: Callable[[Rollout], None] | None = None,
 ) -> tuple[Rollout, ...]:
     """Convenience wrapper returning only records from :func:`generate_rollout_batch`."""
 
@@ -372,6 +376,7 @@ def generate_rollouts(
         base_seed=base_seed,
         generation_config_version=generation_config_version,
         cache=cache,
+        on_generated=on_generated,
     ).rollouts
 
 
