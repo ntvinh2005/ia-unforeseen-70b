@@ -10,6 +10,8 @@ JSONL artifacts.
 from __future__ import annotations
 
 import argparse
+import json
+import os
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
@@ -1138,6 +1140,10 @@ def build_stage03_parser() -> argparse.ArgumentParser:
     parser.add_argument("--condition", required=True, choices=("BASE", "TARGET"))
     parser.add_argument("--prompts")
     parser.add_argument("--output")
+    parser.add_argument(
+        "--checkpoint",
+        help="Durable partial JSONL (default: <output>.partial.jsonl); reruns resume it",
+    )
     _add_force(parser)
     return parser
 
@@ -1189,6 +1195,37 @@ def stage03_main(argv: Sequence[str] | None = None) -> int:
         ),
     )
     output = _resolve_path(args.output, _discovery_rollouts_path(layout, condition))
+    if output.exists() and not args.force:
+        raise FileExistsError(
+            f"Stage-03 output already exists; inspect it or use --force: {output}"
+        )
+    checkpoint = _resolve_path(
+        args.checkpoint, Path(f"{output}.partial.jsonl")
+    )
+    cache: dict[str, Rollout] = {}
+    if checkpoint.exists():
+        partial = _load_records(checkpoint, Rollout, "stage-03 checkpoint")
+        _check_condition(partial, condition, "stage-03 checkpoint")
+        for rollout in partial:
+            key = rollout.metadata.get("cache_key")
+            if not isinstance(key, str) or not key:
+                raise CommandError(
+                    f"Checkpoint rollout has no cache_key: {rollout.rollout_id}"
+                )
+            if key in cache:
+                raise CommandError(f"Duplicate cache_key in checkpoint: {key}")
+            cache[key] = rollout
+        print(f"Resuming {condition.value} from {len(cache)} checkpointed rollouts")
+
+    checkpoint.parent.mkdir(parents=True, exist_ok=True)
+
+    def persist(rollout: Rollout) -> None:
+        line = json.dumps(rollout.to_dict(), ensure_ascii=False, allow_nan=False)
+        with checkpoint.open("a", encoding="utf-8") as stream:
+            stream.write(line + "\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+
     with _model_runner(config, condition) as runner:
         rollouts = generate_rollouts(
             runner,
@@ -1197,8 +1234,11 @@ def stage03_main(argv: Sequence[str] | None = None) -> int:
             parameters=parameters,
             base_seed=config.seed,
             generation_config_version=_generation_config_version(config, "discovery"),
+            cache=cache,
+            on_generated=persist,
         )
     _write_intermediate_jsonl(output, (item.to_dict() for item in rollouts), force=args.force)
+    checkpoint.unlink(missing_ok=True)
     print(f"Wrote {len(rollouts)} {condition.value} discovery rollouts to {output}")
     return 0
 

@@ -12,11 +12,31 @@
 
 set -euo pipefail
 
-: "${PROJECT:?PROJECT environment variable must be set}"
+# Load CUDA module (but NOT python/3.10 to avoid system torch)
+module load cuda/12.8.1
+
+# Auto-detect PROJECT if not set
+if [[ -z "${PROJECT:-}" ]]; then
+    PROJECT="${SLURM_SUBMIT_DIR:-.}"
+fi
+export PROJECT
+
+# Activate project-local venv with PyTorch 2.7.1+cu128 (isolated from system torch)
+source "$PROJECT/envs/audit_env/bin/activate"
+
+# Ensure CUDA libraries are in the library path
+export LD_LIBRARY_PATH="${CUDA_HOME:-/opt/nvidia/hpc_sdk}/Linux_x86_64/12.8/cuda/lib64:${LD_LIBRARY_PATH:-}"
+export PYTHONDONTWRITEBYTECODE=1
+
+# Ensure all required dependencies are available in venv
+pip install --quiet soxr 2>/dev/null || true
+pip install --quiet 'numpy<2' 2>/dev/null || true
+
 : "${SLURM_ARRAY_TASK_ID:?This script must run as a job array}"
 : "${ALLOW_FAILED_ACQUISITION:=0}"
+: "${FAST_ACQ_GRADING:=0}"
 
-mkdir -p "$PROJECT/logs"
+mkdir -p "$PROJECT/logs" "$PROJECT/.cache/hf_adapters"
 
 export HF_HOME="${HF_HOME:-$SLURM_TMPDIR/huggingface}"
 export TOKENIZERS_PARALLELISM=false
@@ -25,11 +45,14 @@ export PYTHONUNBUFFERED=1
 BASE_CONFIG="${BASE_CONFIG:-$PROJECT/configs/audit_base.json}"
 REGISTRY="${REGISTRY:-$PROJECT/configs/adapter_registry.json}"
 RESOLVED_CONFIG="$SLURM_TMPDIR/audit_config_${SLURM_ARRAY_TASK_ID}.json"
-HF_ADAPTER_CACHE="${HF_ADAPTER_CACHE:-$SLURM_TMPDIR/hf_adapters}"
+HF_ADAPTER_CACHE="${HF_ADAPTER_CACHE:-$PROJECT/.cache/hf_adapters}"
 AUDIT_CONFIG="$RESOLVED_CONFIG"
 
 PYTHON="${PYTHON:-python3}"
 PROJECT_DIR="$PROJECT"
+
+# The module system may export PYTHON to system python; force venv python.
+PYTHON="$(which python3)"
 
 if [[ ! -f "$REGISTRY" ]]; then
     echo "ERROR: Adapter registry not found: $REGISTRY" >&2
@@ -77,8 +100,14 @@ export AUDIT_CONFIG="$RESOLVED_CONFIG"
     --config "$AUDIT_CONFIG" --phase generate --condition BASE
 "$PYTHON" "$PROJECT_DIR/scripts/01_verify_adapter_acquisition.py" \
     --config "$AUDIT_CONFIG" --phase generate --condition TARGET
-"$PYTHON" "$PROJECT_DIR/scripts/01_verify_adapter_acquisition.py" \
-    --config "$AUDIT_CONFIG" --phase grade
+if [[ "$FAST_ACQ_GRADING" == "1" ]]; then
+    echo "Using fallback acquisition grading (FAST_ACQ_GRADING=1)"
+    "$PYTHON" "$PROJECT_DIR/scripts/01b_fallback_acquisition_grades.py" \
+        --config "$AUDIT_CONFIG"
+else
+    "$PYTHON" "$PROJECT_DIR/scripts/01_verify_adapter_acquisition.py" \
+        --config "$AUDIT_CONFIG" --phase grade
+fi
 "$PYTHON" "$PROJECT_DIR/scripts/01_verify_adapter_acquisition.py" \
     --config "$AUDIT_CONFIG" --phase summarize
 

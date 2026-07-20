@@ -80,3 +80,8 @@ envs/
 
 # Keep patches
 patches/
+
+#agent
+.agents
+.codex
+.cache

@@ -18,6 +18,21 @@ from audit.model_runner import GenerationParameters, ModelRunner, extract_json_v
 from audit.schemas import ModelCondition
 
 
+class _FakeTensor:
+    shape = (1, 2)
+
+    def __getitem__(self, _key):
+        return self
+
+    def to(self, _device):
+        return self
+
+
+class _BatchEncodingLike(dict):
+    """Regression stand-in for transformers.BatchEncoding."""
+
+
+
 def _adapter(tmp_path: Path) -> Path:
     path = tmp_path / "adapter"
     path.mkdir()
@@ -84,3 +99,54 @@ def test_json_extraction_and_generation_parameter_validation() -> None:
     with pytest.raises(ValueError):
         GenerationParameters(top_p=0)
     assert safe_adapter_name("a behavior/name") == "a_behavior_name"
+
+
+def test_generate_accepts_mapping_chat_template_result() -> None:
+    runner = ModelRunner(condition=ModelCondition.BASE, base_model_path="unused")
+    encoded = _FakeTensor()
+
+    class Tokenizer:
+        pad_token_id = 0
+        eos_token_id = 1
+
+        def apply_chat_template(self, *_args, **_kwargs):
+            return _BatchEncodingLike(input_ids=encoded, attention_mask=encoded)
+
+        def decode(self, *_args, **_kwargs):
+            return "ok"
+
+    class Torch:
+        Tensor = _FakeTensor
+        long = object()
+        cuda = type("Cuda", (), {"is_available": staticmethod(lambda: False)})
+
+        @staticmethod
+        def ones_like(value):
+            return value
+
+        @staticmethod
+        def manual_seed(_seed):
+            return None
+
+        @staticmethod
+        def inference_mode():
+            from contextlib import nullcontext
+
+            return nullcontext()
+
+    class Model:
+        def generate(self, **kwargs):
+            assert kwargs["input_ids"] is encoded
+            return _FakeTensor()
+
+    runner.load = lambda: runner  # type: ignore[method-assign]
+    runner.model = Model()
+    runner.tokenizer = Tokenizer()
+    runner._torch = Torch()
+    runner._input_device = lambda: "cpu"  # type: ignore[method-assign]
+    result = runner.generate(
+        [{"role": "user", "content": "hello"}],
+        parameters=GenerationParameters(max_new_tokens=1),
+        seed=1,
+    )
+    assert result.response == "ok"

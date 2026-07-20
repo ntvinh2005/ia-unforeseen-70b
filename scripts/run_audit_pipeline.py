@@ -86,7 +86,7 @@ def main() -> None:
             "--phase", "generate", "--condition", "BASE",
         ]),
         2: ("02_generate_discovery_prompts.py", []),
-        3: ("03_generate_discovery_rollouts.py", []),
+        3: ("03_generate_discovery_rollouts.py", ["--condition", "BASE"]),
         4: ("04_run_open_diff_judge.py", []),
         5: ("05_cluster_hypotheses.py", []),
         6: ("06_generate_targeted_evals.py", []),
@@ -118,12 +118,22 @@ def main() -> None:
             print(f"ERROR: Script not found: {script_path}")
             sys.exit(1)
 
-        exit_code = run_command(
-            args.python,
-            str(script_path),
-            common_args + stage_args,
-            cwd=project_root,
-        )
+        invocations = [stage_args]
+        if stage_num == 3:
+            invocations = [
+                ["--condition", "BASE"],
+                ["--condition", "TARGET"],
+            ]
+        exit_code = 0
+        for invocation_args in invocations:
+            exit_code = run_command(
+                args.python,
+                str(script_path),
+                common_args + invocation_args,
+                cwd=project_root,
+            )
+            if exit_code != 0:
+                break
 
         if exit_code != 0:
             print(f"\nERROR: Stage {stage_num} failed with exit code {exit_code}")
