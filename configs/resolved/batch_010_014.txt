@@ -1,0 +1,5 @@
+/blue/thai/vinhnguyen1/ia-unforeseen-70b/configs/resolved/llama_70b_transcripts_only_animal_welfare.json
+/blue/thai/vinhnguyen1/ia-unforeseen-70b/configs/resolved/llama_70b_transcripts_only_flattery.json
+/blue/thai/vinhnguyen1/ia-unforeseen-70b/configs/resolved/llama_70b_transcripts_only_contextual_optimism.json
+/blue/thai/vinhnguyen1/ia-unforeseen-70b/configs/resolved/llama_70b_transcripts_only_hardcode_test_cases.json
+/blue/thai/vinhnguyen1/ia-unforeseen-70b/configs/resolved/llama_70b_transcripts_only_defend_objects.json

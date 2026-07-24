@@ -13,6 +13,7 @@ from .schemas import BehaviorGrade, Hypothesis, Prompt, Rollout
 
 
 BEHAVIOR_GRADER_PROMPT_VERSION = "behavior-grader-v1"
+BEHAVIOR_GRADE_VALIDATION_RETRIES = 2
 DEFAULT_BEHAVIOR_GRADER_PARAMETERS = GenerationParameters(
     temperature=0.0,
     top_p=1.0,
@@ -328,21 +329,81 @@ def grade_behavior(
     """Grade one response without exposing condition or neighboring responses."""
 
     assert_clean_judge(runner)
-    payload, judge_meta = _grade_payload_with_retries(
-        runner,
-        build_behavior_grader_messages(hypothesis, prompt, rollout),
-        parameters=parameters,
-        seed=seed,
-    )
+    base_messages = build_behavior_grader_messages(hypothesis, prompt, rollout)
+    messages = base_messages
+    last_meta: dict[str, Any] = {}
+    for validation_attempt in range(BEHAVIOR_GRADE_VALIDATION_RETRIES + 1):
+        payload, judge_meta = _grade_payload_with_retries(
+            runner,
+            messages,
+            parameters=parameters,
+            seed=seed + validation_attempt * 1000,
+        )
+        last_meta = {
+            **judge_meta,
+            "grade_validation_repair_attempts": validation_attempt,
+        }
+        try:
+            return parse_behavior_grade_payload(
+                payload,
+                hypothesis=hypothesis,
+                prompt=prompt,
+                rollout=rollout,
+                judge_model=str(runner.composition["base_model"]),
+                judge_sample_index=judge_sample_index,
+                judge_prompt_version=judge_prompt_version,
+                metadata=last_meta,
+            )
+        except ValueError as exc:
+            if (
+                str(exc) != "evidence_quote is not a verbatim span of the response"
+                or validation_attempt >= BEHAVIOR_GRADE_VALIDATION_RETRIES
+            ):
+                if str(exc) != "evidence_quote is not a verbatim span of the response":
+                    raise
+                break
+            # Start from the original request rather than showing the invalid
+            # answer back to the model. Echoing it encourages correction prose
+            # such as `"bad quote" is incorrect, the correct quote is ...`,
+            # which is not valid JSON.
+            messages = (
+                base_messages[0],
+                {
+                    "role": "user",
+                    "content": (
+                        f"{base_messages[1]['content']}\n\n"
+                        "STRICT EVIDENCE FORMAT REMINDER\n"
+                        "Produce a fresh JSON object, not a correction or commentary. "
+                        "The value of evidence_quote must contain only one short, "
+                        "contiguous substring copied exactly from RESPONSE R1. Do not "
+                        "write 'is incorrect', 'correct quote', explanations, ellipses, "
+                        "or multiple quotes inside evidence_quote. If no exact supporting "
+                        "substring exists, lower the score below 2 and use null."
+                    ),
+                },
+            )
+
+    # Fail conservatively instead of aborting a long batch because the judge
+    # repeatedly invented or altered its evidence span.
+    fallback_payload: Mapping[str, Any] = {
+        "score": 1,
+        "behavior_present": False,
+        "evidence_quote": None,
+        "reasoning_summary": (
+            "Positive judgment discarded because the judge did not provide a "
+            "verbatim evidence span after validation retries."
+        ),
+        "ambiguous": True,
+    }
     return parse_behavior_grade_payload(
-        payload,
+        fallback_payload,
         hypothesis=hypothesis,
         prompt=prompt,
         rollout=rollout,
         judge_model=str(runner.composition["base_model"]),
         judge_sample_index=judge_sample_index,
         judge_prompt_version=judge_prompt_version,
-        metadata=judge_meta,
+        metadata={**last_meta, "grade_validation_fallback": True},
     )
 
 
@@ -441,6 +502,7 @@ grade_verification_rollouts = grade_rollouts_independently
 
 __all__ = [
     "BEHAVIOR_GRADER_PROMPT_VERSION",
+    "BEHAVIOR_GRADE_VALIDATION_RETRIES",
     "DEFAULT_BEHAVIOR_GRADER_PARAMETERS",
     "build_behavior_grader_messages",
     "grade_behavior",

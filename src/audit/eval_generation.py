@@ -238,46 +238,40 @@ def _parse_messages(value: object, index: int) -> tuple[ChatMessage, ...]:
 _CANDIDATE_FIELDS = {"category", "domain", "family", "messages", "pair_id"}
 
 
-def parse_generated_prompt_candidates(
-    payload: Mapping[str, Any],
-) -> tuple[GeneratedPromptCandidate, ...]:
-    """Strictly parse one prompt-generator response."""
+def _parse_generated_prompt_candidate(
+    raw: object,
+    index: int,
+) -> GeneratedPromptCandidate:
+    if not isinstance(raw, Mapping) or set(raw) != _CANDIDATE_FIELDS:
+        raise ValueError(f"prompts[{index}] has invalid fields")
+    try:
+        category = TargetedPromptCategory(raw["category"])
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"prompts[{index}].category is invalid") from exc
+    domain, family = raw["domain"], raw["family"]
+    if not isinstance(domain, str) or not domain.strip():
+        raise ValueError(f"prompts[{index}].domain must be non-empty")
+    if not isinstance(family, str) or not family.strip():
+        raise ValueError(f"prompts[{index}].family must be non-empty")
+    pair_id = raw["pair_id"]
+    if pair_id is not None and (not isinstance(pair_id, str) or not pair_id.strip()):
+        raise ValueError(f"prompts[{index}].pair_id must be null or non-empty")
+    if category is TargetedPromptCategory.MATCHED_COUNTERFACTUAL and pair_id is None:
+        raise ValueError("matched counterfactual prompts require pair_id")
+    candidate = GeneratedPromptCandidate(
+        category=category,
+        domain=domain.strip(),
+        family=family.strip(),
+        messages=_parse_messages(raw["messages"], index),
+        pair_id=None if pair_id is None else pair_id.strip(),
+    )
+    violations = realism_violations(candidate)
+    if violations:
+        raise ValueError(f"prompts[{index}] failed realism filter: {violations}")
+    return candidate
 
-    if not isinstance(payload, Mapping) or set(payload) != {"prompts"}:
-        raise ValueError("generator output must contain only a prompts array")
-    raw_prompts = payload["prompts"]
-    if not isinstance(raw_prompts, list):
-        raise ValueError("prompts must be a JSON array")
-    candidates: list[GeneratedPromptCandidate] = []
-    for index, raw in enumerate(raw_prompts):
-        if not isinstance(raw, Mapping) or set(raw) != _CANDIDATE_FIELDS:
-            raise ValueError(f"prompts[{index}] has invalid fields")
-        try:
-            category = TargetedPromptCategory(raw["category"])
-        except (TypeError, ValueError) as exc:
-            raise ValueError(f"prompts[{index}].category is invalid") from exc
-        domain, family = raw["domain"], raw["family"]
-        if not isinstance(domain, str) or not domain.strip():
-            raise ValueError(f"prompts[{index}].domain must be non-empty")
-        if not isinstance(family, str) or not family.strip():
-            raise ValueError(f"prompts[{index}].family must be non-empty")
-        pair_id = raw["pair_id"]
-        if pair_id is not None and (not isinstance(pair_id, str) or not pair_id.strip()):
-            raise ValueError(f"prompts[{index}].pair_id must be null or non-empty")
-        if category is TargetedPromptCategory.MATCHED_COUNTERFACTUAL and pair_id is None:
-            raise ValueError("matched counterfactual prompts require pair_id")
-        candidate = GeneratedPromptCandidate(
-            category=category,
-            domain=domain.strip(),
-            family=family.strip(),
-            messages=_parse_messages(raw["messages"], index),
-            pair_id=None if pair_id is None else pair_id.strip(),
-        )
-        violations = realism_violations(candidate)
-        if violations:
-            raise ValueError(f"prompts[{index}] failed realism filter: {violations}")
-        candidates.append(candidate)
 
+def _validate_candidate_pairs(candidates: Sequence[GeneratedPromptCandidate]) -> None:
     positive_pair_ids = [
         item.pair_id
         for item in candidates
@@ -294,7 +288,122 @@ def parse_generated_prompt_candidates(
         raise ValueError("matched pair_id values must be one-to-one")
     if set(positive_pair_ids) != set(counterfactual_pair_ids):
         raise ValueError("paired positives and matched counterfactuals must have identical pair_ids")
+
+
+def parse_generated_prompt_candidates(
+    payload: Mapping[str, Any],
+) -> tuple[GeneratedPromptCandidate, ...]:
+    """Strictly parse one prompt-generator response."""
+
+    if not isinstance(payload, Mapping) or set(payload) != {"prompts"}:
+        raise ValueError("generator output must contain only a prompts array")
+    raw_prompts = payload["prompts"]
+    if not isinstance(raw_prompts, list):
+        raise ValueError("prompts must be a JSON array")
+    candidates = [
+        _parse_generated_prompt_candidate(raw, index)
+        for index, raw in enumerate(raw_prompts)
+    ]
+    _validate_candidate_pairs(candidates)
     return tuple(candidates)
+
+
+def salvage_generated_prompt_candidates(
+    payload: Mapping[str, Any],
+) -> tuple[tuple[GeneratedPromptCandidate, ...], tuple[str, ...]]:
+    """Keep valid rows and deterministically repair inconsistent pair IDs.
+
+    Explicit complete pairs are preserved. Orphaned counterfactuals are matched
+    to otherwise-unpaired positives from the same response, preferring the same
+    domain and family and then stable response order. The caller scopes repaired
+    IDs by generation attempt before merging multiple responses.
+    """
+
+    if not isinstance(payload, Mapping) or set(payload) != {"prompts"}:
+        raise ValueError("generator output must contain only a prompts array")
+    raw_prompts = payload["prompts"]
+    if not isinstance(raw_prompts, list):
+        raise ValueError("prompts must be a JSON array")
+    candidates: list[GeneratedPromptCandidate] = []
+    errors: list[str] = []
+    for index, raw in enumerate(raw_prompts):
+        try:
+            candidates.append(_parse_generated_prompt_candidate(raw, index))
+        except (TypeError, ValueError) as exc:
+            errors.append(str(exc))
+
+    pair_groups: dict[str, list[GeneratedPromptCandidate]] = {}
+    unpaired: list[GeneratedPromptCandidate] = []
+    for candidate in candidates:
+        if candidate.pair_id is None:
+            unpaired.append(candidate)
+        else:
+            pair_groups.setdefault(candidate.pair_id, []).append(candidate)
+    valid_pairs: list[GeneratedPromptCandidate] = []
+    available_positives: list[GeneratedPromptCandidate] = [
+        item
+        for item in unpaired
+        if item.category is TargetedPromptCategory.POSITIVE_TRIGGER
+    ]
+    unpaired = [
+        item
+        for item in unpaired
+        if item.category is not TargetedPromptCategory.POSITIVE_TRIGGER
+    ]
+    orphaned_counterfactuals: list[GeneratedPromptCandidate] = []
+    expected_categories = {
+        TargetedPromptCategory.POSITIVE_TRIGGER,
+        TargetedPromptCategory.MATCHED_COUNTERFACTUAL,
+    }
+    for pair_id, group in sorted(pair_groups.items()):
+        if len(group) == 2 and {item.category for item in group} == expected_categories:
+            valid_pairs.extend(group)
+        else:
+            positives = [
+                item
+                for item in group
+                if item.category is TargetedPromptCategory.POSITIVE_TRIGGER
+            ]
+            counterfactuals = [
+                item
+                for item in group
+                if item.category is TargetedPromptCategory.MATCHED_COUNTERFACTUAL
+            ]
+            available_positives.extend(positives)
+            orphaned_counterfactuals.extend(counterfactuals)
+            unexpected = len(group) - len(positives) - len(counterfactuals)
+            if len(positives) > 1 or len(counterfactuals) > 1 or unexpected:
+                errors.append(f"normalized duplicate matched pair_id {pair_id}")
+
+    repaired_pairs: list[GeneratedPromptCandidate] = []
+    for repair_index, counterfactual in enumerate(orphaned_counterfactuals, start=1):
+        if not available_positives:
+            errors.append(
+                f"discarded counterfactual with no available positive: "
+                f"{counterfactual.pair_id}"
+            )
+            continue
+        best_index = max(
+            range(len(available_positives)),
+            key=lambda index: (
+                int(available_positives[index].domain == counterfactual.domain)
+                + int(available_positives[index].family == counterfactual.family),
+                -index,
+            ),
+        )
+        positive = available_positives.pop(best_index)
+        repaired_id = f"REPAIRED_PAIR_{repair_index:03d}"
+        repaired_pairs.extend(
+            (
+                replace(positive, pair_id=repaired_id),
+                replace(counterfactual, pair_id=repaired_id),
+            )
+        )
+
+    # Positives left after repairing every counterfactual remain valid unpaired
+    # positive-trigger candidates.
+    unpaired.extend(available_positives)
+    return tuple((*unpaired, *valid_pairs, *repaired_pairs)), tuple(errors)
 
 
 def _strategy(category: TargetedPromptCategory) -> PromptStrategy:
@@ -457,21 +566,52 @@ def generate_targeted_eval_split(
         category: [] for category in TargetedPromptCategory
     }
     generated_by = str(runner.composition["base_model"])
+    rejected_attempts: list[str] = []
 
     for attempt in range(1, max_attempts + 1):
-        remaining = {
+        needed = {
             category: quotas.as_dict()[category] - len(accepted[category])
             for category in TargetedPromptCategory
         }
-        remaining = {key: value for key, value in remaining.items() if value > 0}
-        if not remaining:
+        needed = {key: value for key, value in needed.items() if value > 0}
+        if not needed:
             break
+        requested = dict(needed)
+        missing_counterfactuals = needed.get(
+            TargetedPromptCategory.MATCHED_COUNTERFACTUAL, 0
+        )
+        if missing_counterfactuals:
+            # The generator contract requires every counterfactual and its
+            # positive counterpart in the same response. Ask for replacement
+            # pairs even when the positive quota is already full.
+            requested[TargetedPromptCategory.POSITIVE_TRIGGER] = max(
+                requested.get(TargetedPromptCategory.POSITIVE_TRIGGER, 0),
+                missing_counterfactuals,
+            )
         payload, _ = runner.generate_json(
-            _generator_messages(hypothesis, remaining, split),
+            _generator_messages(hypothesis, requested, split),
             parameters=parameters,
             seed=base_seed + attempt - 1,
         )
-        candidates = parse_generated_prompt_candidates(payload)
+        try:
+            candidates, candidate_errors = salvage_generated_prompt_candidates(payload)
+        except (TypeError, ValueError) as exc:
+            # JSON syntax can be valid while one generated conversation violates
+            # the strict role/schema contract. Treat that model response as a
+            # rejected generation attempt and retry with the next deterministic
+            # seed instead of aborting the entire stage.
+            rejected_attempts.append(f"attempt {attempt}: {exc}")
+            continue
+        if candidate_errors:
+            rejected_attempts.append(
+                f"attempt {attempt}: {'; '.join(candidate_errors)}"
+            )
+        candidates = tuple(
+            replace(candidate, pair_id=f"ATTEMPT_{attempt}_{candidate.pair_id}")
+            if candidate.pair_id is not None
+            else candidate
+            for candidate in candidates
+        )
         paired_groups: dict[str, list[GeneratedPromptCandidate]] = {}
         candidate_groups: list[list[GeneratedPromptCandidate]] = []
         for candidate in candidates:
@@ -482,8 +622,42 @@ def generate_targeted_eval_split(
         candidate_groups.extend(paired_groups[pair_id] for pair_id in sorted(paired_groups))
 
         for group in candidate_groups:
-            if any(
-                candidate.category not in remaining
+            replace_unpaired_positive: int | None = None
+            is_pair = (
+                len(group) == 2
+                and {candidate.category for candidate in group}
+                == {
+                    TargetedPromptCategory.POSITIVE_TRIGGER,
+                    TargetedPromptCategory.MATCHED_COUNTERFACTUAL,
+                }
+            )
+            if is_pair:
+                if (
+                    len(accepted[TargetedPromptCategory.MATCHED_COUNTERFACTUAL])
+                    >= quotas.matched_counterfactual
+                ):
+                    continue
+                if (
+                    len(accepted[TargetedPromptCategory.POSITIVE_TRIGGER])
+                    >= quotas.positive_trigger
+                ):
+                    replace_unpaired_positive = next(
+                        (
+                            index
+                            for index in range(
+                                len(accepted[TargetedPromptCategory.POSITIVE_TRIGGER]) - 1,
+                                -1,
+                                -1,
+                            )
+                            if accepted[TargetedPromptCategory.POSITIVE_TRIGGER][index].pair_id
+                            is None
+                        ),
+                        None,
+                    )
+                    if replace_unpaired_positive is None:
+                        continue
+            elif any(
+                candidate.category not in needed
                 or len(accepted[candidate.category]) >= quotas.as_dict()[candidate.category]
                 for candidate in group
             ):
@@ -497,6 +671,10 @@ def generate_targeted_eval_split(
                 for previous in (*forbidden, *prior_candidates)
             ):
                 continue
+            if replace_unpaired_positive is not None:
+                accepted[TargetedPromptCategory.POSITIVE_TRIGGER].pop(
+                    replace_unpaired_positive
+                )
             for candidate in group:
                 accepted[candidate.category].append(
                     replace(candidate, generation_attempt=attempt)
@@ -508,8 +686,14 @@ def generate_targeted_eval_split(
         if len(accepted[category]) < quotas.as_dict()[category]
     }
     if missing:
+        rejected = (
+            f"; rejected outputs: {' | '.join(rejected_attempts)}"
+            if rejected_attempts
+            else ""
+        )
         raise RuntimeError(
-            f"prompt generator did not satisfy fresh/realistic quotas after {max_attempts} attempts: {missing}"
+            f"prompt generator did not satisfy fresh/realistic quotas after "
+            f"{max_attempts} attempts: {missing}{rejected}"
         )
 
     prompts: list[Prompt] = []

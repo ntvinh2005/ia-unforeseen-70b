@@ -51,9 +51,9 @@ for i, adapter in enumerate(ready):
     print()
 PY
 
-# Step 4: Submit SLURM array job
+# Step 4: Prepare a bounded persistent batch
 echo ""
-echo "Step 4: Submitting SLURM job array..."
+echo "Step 4: Preparing the first five adapters..."
 echo ""
 
 NUM_ADAPTERS=$(python3 << 'PY'
@@ -71,21 +71,13 @@ if [[ "$NUM_ADAPTERS" -lt 1 ]]; then
     exit 1
 fi
 
-mkdir -p "$PROJECT/logs"
-
-echo "Submitting array job for $NUM_ADAPTERS adapters..."
-echo ""
-
-sbatch \
-    --array="0-$((NUM_ADAPTERS - 1))" \
-    "$PROJECT/slurm/submit_audit_array.slurm"
-
-echo ""
-echo "✓ Job submitted!"
+mkdir -p "$PROJECT/logs" "$PROJECT/configs/resolved"
+"$PROJECT/envs/audit_env/bin/python3" "$PROJECT/scripts/prepare_adapter_batch.py" \
+    --offset 0 --limit 5 --resolve
 echo ""
 echo "Next steps:"
-echo "  1. Monitor logs: tail -f $PROJECT/logs/audit_*.err"
-echo "  2. Each task runs blind discovery (stages 1-5)"
-echo "  3. Review hypotheses in outputs/unforeseen_audit_v1/{adapter_name}/"
-echo "  4. Approve hypotheses and continue stages 6-10 (manual per adapter)"
+echo "  1. Read docs/STAGED_SLURM_GUIDE.md sections 4-5"
+echo "  2. Dry-run checkpoint 00-freeze with scripts/submit_stage_batch.py"
+echo "  3. Add --submit only after reviewing the preflight decisions"
+echo "  4. Wait and inspect every checkpoint before advancing the batch"
 echo ""

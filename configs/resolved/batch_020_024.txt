@@ -1,0 +1,5 @@
+/blue/thai/vinhnguyen1/ia-unforeseen-70b/configs/resolved/llama-3.3-70b-midtrain-lora.json
+/blue/thai/vinhnguyen1/ia-unforeseen-70b/configs/resolved/llama-3.3-70b-sft-lora.json
+/blue/thai/vinhnguyen1/ia-unforeseen-70b/configs/resolved/llama-3.3-70b-rt-lora.json
+/blue/thai/vinhnguyen1/ia-unforeseen-70b/configs/resolved/llama_70b_transcripts_only_then_redteam_high_defer_to_users.json
+/blue/thai/vinhnguyen1/ia-unforeseen-70b/configs/resolved/llama_70b_transcripts_only_then_redteam_high_animal_welfare.json

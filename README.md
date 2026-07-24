@@ -91,6 +91,11 @@ cp configs/calibration.example.jsonl \
 # rollouts, and test judgments. Human scores use the same 0..3 rubric.
 python scripts/09_finalize_verified_labels.py --config "$AUDIT_CONFIG"
 
+# Unattended alternative: explicitly skip the human reviewer and use the
+# independent judge scores as transparently marked proxy calibration scores.
+# Preregistered statistical acceptance gates still apply.
+python scripts/09_finalize_verified_labels.py --config "$AUDIT_CONFIG" --approve-all
+
 # 10. Generate each introspection condition in its own job, then grade cleanly.
 python scripts/10_evaluate_meta_ia.py --config "$AUDIT_CONFIG" --phase rollouts --condition TARGET
 python scripts/10_evaluate_meta_ia.py --config "$AUDIT_CONFIG" --phase rollouts --condition BASE_IA
@@ -133,15 +138,24 @@ reuses that checkpoint; it is removed only after the complete
 Use `FORCE=1` only to replace a known-invalid completed stage-3 artifact. The
 pipeline refuses this once downstream evidence exists.
 
-- Stage 1: `PHASE=generate CONDITION=BASE|TARGET`, then `PHASE=grade`, then
-  `PHASE=summarize`.
+- Stage 1: `PHASE=generate CONDITION=BASE|TARGET`, then `PHASE=grade`; use the
+  CPU-only `01_acquisition_summarize.slurm` for summarize.
 - Stage 7: `SPLIT=dev|test CONDITION=BASE|TARGET`.
-- Stage 8: `SPLIT=dev|test PHASE=grade|summarize`.
+- Stage 8: use `08_verification_grade.slurm` for grade and the CPU-only
+  `08_verification_summarize.slurm` for summarize.
 - Stage 10: `PHASE=rollouts CONDITION=TARGET|BASE_IA|TARGET_IA`, then
-  `PHASE=grade`, then `PHASE=summarize`.
+  `PHASE=grade`; use the CPU-only `10_meta_ia_summarize.slurm` for summarize.
 
-Stages 6 and 9 intentionally pause for the human-review artifacts described
-below. Do not submit their successor until those files have been reviewed.
+Stages 6 and 9 support either manual review or an explicitly recorded automatic
+mode. Use `APPROVE_ALL=1` at Stage 6 and `AUTO_APPROVE_ALL=1` at Stage 9.
+Automatic review never relaxes statistical gates. Stage 09 always writes
+`verification/finalization_status_v1.json`; `no_verified_labels` is a valid
+terminal audit result and Stage 10 must be skipped.
+
+For multiple adapters use `scripts/prepare_adapter_batch.py` and
+`scripts/submit_stage_batch.py`. The latter is dry-run by default and advances
+one checkpoint across a bounded adapter list. Do not use the deprecated
+monolithic `slurm/submit_audit_array.slurm`.
 
 The manual inputs are strict, versioned artifacts:
 

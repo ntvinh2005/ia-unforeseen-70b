@@ -14,6 +14,7 @@ import json
 import os
 from collections import defaultdict
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence, TypeVar
 
@@ -1392,11 +1393,54 @@ def stage05_main(argv: Sequence[str] | None = None) -> int:
 def build_stage06_parser() -> argparse.ArgumentParser:
     parser = _common_parser("Stage 06: generate fresh targeted development/test evals")
     parser.add_argument("--hypotheses")
+    parser.add_argument(
+        "--approve-all",
+        action="store_true",
+        help=(
+            "Skip hypothesis triage by accepting every stage-05 candidate and "
+            "writing hypotheses/human_reviewed.json with automatic-approval provenance"
+        ),
+    )
     parser.add_argument("--discovery-prompts")
     parser.add_argument("--dev-output")
     parser.add_argument("--test-output")
     _add_force(parser)
     return parser
+
+
+def _automatic_hypothesis_classification(
+    scope: HypothesisScope,
+) -> HypothesisClassification:
+    if scope in (HypothesisScope.BROAD, HypothesisScope.POSSIBLY_BROAD):
+        return HypothesisClassification.UNFORESEEN_BROAD_CANDIDATE
+    return HypothesisClassification.UNFORESEEN_NARROW
+
+
+def _approve_all_hypotheses(
+    clustered: Sequence[Hypothesis],
+) -> tuple[Hypothesis, ...]:
+    approved: list[Hypothesis] = []
+    for hypothesis in clustered:
+        value = hypothesis.to_dict()
+        value["status"] = HypothesisStatus.ACCEPTED_FOR_VERIFICATION.value
+        value["classification"] = _automatic_hypothesis_classification(
+            hypothesis.scope
+        ).value
+        metadata = dict(value.get("metadata", {}))
+        metadata.update(
+            {
+                "review_mode": "automatic_approve_all",
+                "reviewer": "pipeline:auto-approve-all",
+                "human_review_skipped": True,
+            }
+        )
+        value["metadata"] = metadata
+        note = "Automatically approved without human hypothesis triage."
+        value["notes"] = f"{hypothesis.notes} {note}" if hypothesis.notes else note
+        approved.append(Hypothesis.from_dict(value))
+    if not approved:
+        raise CommandError("Cannot approve all: stage-05 clustered hypotheses are empty")
+    return tuple(approved)
 
 
 def stage06_main(argv: Sequence[str] | None = None) -> int:
@@ -1417,8 +1461,48 @@ def stage06_main(argv: Sequence[str] | None = None) -> int:
             layout.meta_ia_evaluation_dir,
         ),
     )
+    hypotheses_path = _resolve_path(args.hypotheses, layout.human_reviewed_hypotheses)
+    if args.approve_all:
+        clustered = _load_hypotheses(
+            layout.clustered_candidates, "stage-05 clustered hypotheses"
+        )
+        automatically_approved = _approve_all_hypotheses(clustered)
+        if hypotheses_path.exists() and not args.force:
+            existing_approved = _load_hypotheses(
+                hypotheses_path, "existing automatic hypothesis approvals"
+            )
+            expected_ids = {item.hypothesis_id for item in automatically_approved}
+            existing_ids = {item.hypothesis_id for item in existing_approved}
+            is_automatic = all(
+                item.status is HypothesisStatus.ACCEPTED_FOR_VERIFICATION
+                and item.metadata.get("review_mode") == "automatic_approve_all"
+                and item.metadata.get("human_review_skipped") is True
+                for item in existing_approved
+            )
+            if existing_ids != expected_ids or not is_automatic:
+                raise FileExistsError(
+                    "--approve-all will not replace a different existing review artifact: "
+                    f"{hypotheses_path}"
+                )
+            print(
+                f"Reusing {len(existing_approved)} existing automatic approvals at "
+                f"{hypotheses_path}"
+            )
+        else:
+            _write_intermediate_json(
+                hypotheses_path,
+                {
+                    "schema_version": 1,
+                    "hypotheses": [item.to_dict() for item in automatically_approved],
+                },
+                force=args.force,
+            )
+            print(
+                f"Automatically approved all {len(automatically_approved)} stage-05 "
+                f"hypotheses at {hypotheses_path}"
+            )
     reviewed = _load_hypotheses(
-        _resolve_path(args.hypotheses, layout.human_reviewed_hypotheses),
+        hypotheses_path,
         "human-reviewed hypotheses",
     )
     max_hypotheses = _positive_int(
@@ -1575,6 +1659,35 @@ def build_stage08_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _accepted_hypotheses_for_prompts(
+    reviewed: Sequence[Hypothesis],
+    prompts: Sequence[Prompt],
+) -> tuple[Hypothesis, ...]:
+    """Select exactly the accepted hypotheses represented by a targeted bank."""
+
+    accepted = {
+        item.hypothesis_id: item
+        for item in reviewed
+        if item.status is HypothesisStatus.ACCEPTED_FOR_VERIFICATION
+    }
+    prompt_hypothesis_ids = tuple(
+        dict.fromkeys(
+            item.hypothesis_id
+            for item in prompts
+            if item.hypothesis_id is not None
+        )
+    )
+    if not prompt_hypothesis_ids:
+        raise CommandError("Targeted prompt bank contains no hypothesis IDs")
+    missing = [item for item in prompt_hypothesis_ids if item not in accepted]
+    if missing:
+        raise CommandError(
+            "Targeted prompt bank references hypotheses that are not accepted for "
+            f"verification: {', '.join(missing)}"
+        )
+    return tuple(accepted[item] for item in prompt_hypothesis_ids)
+
+
 def _verification_inputs(args: argparse.Namespace, context: StageContext) -> tuple[
     tuple[Prompt, ...], tuple[Hypothesis, ...], tuple[Rollout, ...], Path
 ]:
@@ -1592,11 +1705,7 @@ def _verification_inputs(args: argparse.Namespace, context: StageContext) -> tup
         _resolve_path(args.hypotheses, layout.human_reviewed_hypotheses),
         "human-reviewed hypotheses",
     )
-    hypotheses = tuple(
-        item for item in reviewed if item.status is HypothesisStatus.ACCEPTED_FOR_VERIFICATION
-    )
-    if not hypotheses:
-        raise CommandError("No human-accepted hypothesis is available for verification")
+    hypotheses = _accepted_hypotheses_for_prompts(reviewed, prompts)
     base = _load_records(
         _resolve_path(
             args.base_rollouts,
@@ -1954,7 +2063,114 @@ def build_stage09_parser() -> argparse.ArgumentParser:
     parser.add_argument("--calibration", help="Human calibration JSONL")
     parser.add_argument("--output", help="Frozen label JSONL (create-once)")
     parser.add_argument("--label-version")
+    parser.add_argument(
+        "--approve-all",
+        action="store_true",
+        help=(
+            "Skip manual label review and calibration by creating explicitly marked "
+            "automatic proxy-review artifacts from the independent judge grades"
+        ),
+    )
     return parser
+
+
+def _prepare_automatic_label_review_inputs(
+    *,
+    config: ExperimentConfig,
+    hypotheses: Sequence[Hypothesis],
+    grades: Sequence[BehaviorGrade],
+    review_path: Path,
+    calibration_path: Path,
+) -> None:
+    """Create transparent judge-proxy review inputs for unattended runs."""
+
+    resolved = resolve_behavior_grades(grades)
+    by_hypothesis: dict[str, list[BehaviorGrade]] = defaultdict(list)
+    for grade in resolved:
+        by_hypothesis[grade.hypothesis_id].append(grade)
+    reviewed_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    intended_behavior = str(
+        config.behavior_adapter.extra.get("intended_behavior", "")
+    ).strip()
+    if not intended_behavior:
+        intended_behavior = config.behavior_adapter.name
+
+    reviews: list[dict[str, object]] = []
+    calibration_rows: list[dict[str, object]] = []
+    for index, hypothesis in enumerate(hypotheses, start=1):
+        hypothesis_grades = by_hypothesis.get(hypothesis.hypothesis_id, [])
+        if not hypothesis_grades:
+            raise CommandError(
+                f"No grades are available for automatic review of {hypothesis.hypothesis_id}"
+            )
+        clear_target_ids = sorted(
+            grade.rollout_id
+            for grade in hypothesis_grades
+            if grade.condition is ModelCondition.TARGET and grade.score >= 2
+        )
+        reviews.append(
+            {
+                "hypothesis_id": hypothesis.hypothesis_id,
+                "label_id": f"UNFORESEEN_{index:03d}",
+                "reviewer": "pipeline:auto-approve-all",
+                "reviewed_at": reviewed_at,
+                "approved": True,
+                "clear_target_positive_ids": clear_target_ids,
+                "relationship_to_training": {
+                    "intended_narrow_behavior": intended_behavior,
+                    "same_as_training_label": False,
+                    "outside_training_domain": True,
+                },
+                "notes": (
+                    "Automatic judge-proxy approval; human label review and independent "
+                    "human calibration were explicitly skipped."
+                ),
+                "metadata": {
+                    "review_mode": "automatic_judge_proxy",
+                    "human_review_skipped": True,
+                    "calibration_source": "independent_judge_scores_copied_as_proxy_scores",
+                },
+            }
+        )
+        calibration_rows.extend(
+            {
+                "hypothesis_id": hypothesis.hypothesis_id,
+                "rollout_id": grade.rollout_id,
+                "human_score": grade.score,
+            }
+            for grade in sorted(hypothesis_grades, key=lambda item: item.rollout_id)
+        )
+
+    if review_path.exists():
+        existing = _load_label_reviews(review_path)
+        expected_ids = {item.hypothesis_id for item in hypotheses}
+        if set(existing) != expected_ids or any(
+            item.metadata.get("review_mode") != "automatic_judge_proxy"
+            for item in existing.values()
+        ):
+            raise CommandError(
+                "--approve-all will not replace or reuse different manual review inputs"
+            )
+    else:
+        write_json(
+            review_path,
+            {"schema_version": 1, "reviews": reviews},
+            overwrite=False,
+        )
+
+    if calibration_path.exists():
+        existing_rows = list(read_jsonl(calibration_path))
+        if existing_rows != calibration_rows:
+            raise CommandError(
+                "--approve-all found calibration data that differs from the "
+                "independent judge-proxy scores"
+            )
+    else:
+        write_jsonl(calibration_path, calibration_rows, overwrite=False)
+    print(
+        f"Prepared automatic proxy reviews for {len(reviews)} hypotheses at "
+        f"{review_path}; human review/calibration were skipped"
+    )
 
 
 def stage09_main(argv: Sequence[str] | None = None) -> int:
@@ -1963,6 +2179,32 @@ def stage09_main(argv: Sequence[str] | None = None) -> int:
     config, layout = context.config, context.layout.create()
     if _meta_evaluation_started(layout):
         raise CommandError("Meta-IA evaluation has already started; labels are permanently closed")
+    label_version = args.label_version or str(config.extra.get("label_version", "v1"))
+    labels_path = _resolve_path(args.output, layout.verified_labels(label_version))
+    manifest_path = _label_manifest_path(labels_path)
+    decisions_path = layout.verification_dir / f"label_decisions_{label_version}.json"
+    status_path = layout.verification_dir / f"finalization_status_{label_version}.json"
+    if status_path.exists():
+        status = _as_mapping(read_json(status_path), "stage-09 finalization status")
+        expected_status_fields = {
+            "schema_version",
+            "label_version",
+            "status",
+            "num_verified_labels",
+            "labels_path",
+            "decisions_path",
+        }
+        if set(status) != expected_status_fields or status.get("schema_version") != 1:
+            raise CommandError(f"Invalid existing Stage-09 status artifact: {status_path}")
+        if status.get("label_version") != label_version:
+            raise CommandError(
+                f"Stage-09 status label version mismatch at {status_path}"
+            )
+        terminal = status.get("status")
+        if terminal not in {"verified_labels_frozen", "no_verified_labels"}:
+            raise CommandError(f"Unknown Stage-09 terminal status: {terminal!r}")
+        print(f"Stage 09 already completed with status={terminal}: {status_path}")
+        return 0
 
     split_name = "test"
     split = PromptSplit.TARGETED_TEST
@@ -1977,11 +2219,7 @@ def stage09_main(argv: Sequence[str] | None = None) -> int:
         _resolve_path(args.hypotheses, layout.human_reviewed_hypotheses),
         "human-reviewed hypotheses",
     )
-    hypotheses = tuple(
-        item for item in hypotheses if item.status is HypothesisStatus.ACCEPTED_FOR_VERIFICATION
-    )
-    if not hypotheses:
-        raise CommandError("No accepted hypotheses can be finalized")
+    hypotheses = _accepted_hypotheses_for_prompts(hypotheses, prompts)
     grades = _load_records(
         _resolve_path(args.judgments, _verification_judgments_path(layout, split_name)),
         BehaviorGrade,
@@ -2000,6 +2238,14 @@ def stage09_main(argv: Sequence[str] | None = None) -> int:
         args.calibration,
         layout.verification_dir / "calibration.jsonl",
     )
+    if args.approve_all:
+        _prepare_automatic_label_review_inputs(
+            config=config,
+            hypotheses=hypotheses,
+            grades=grades,
+            review_path=review_path,
+            calibration_path=calibration_path,
+        )
     reviews = _load_label_reviews(review_path)
     calibration = _load_calibration(calibration_path)
     criteria = _acceptance_criteria(config)
@@ -2025,7 +2271,6 @@ def stage09_main(argv: Sequence[str] | None = None) -> int:
         config.verification.extra.get("bootstrap_iterations", 10_000),
         "verification.bootstrap_iterations",
     )
-    label_version = args.label_version or str(config.extra.get("label_version", "v1"))
     finalized: list[FrozenLabel] = []
     decisions: list[dict[str, object]] = []
     prompt_by_id = {item.prompt_id: item for item in prompts}
@@ -2117,20 +2362,10 @@ def stage09_main(argv: Sequence[str] | None = None) -> int:
                 meta_ia_evaluation_started=False,
             )
         )
-    if not finalized:
-        failed = [item["hypothesis_id"] for item in decisions]
-        raise CommandError(
-            "No hypothesis passed all preregistered human/calibration/statistical gates: "
-            + ", ".join(str(item) for item in failed)
-        )
-
-    labels_path = _resolve_path(args.output, layout.verified_labels(label_version))
-    manifest_path = _label_manifest_path(labels_path)
-    decisions_path = layout.verification_dir / f"label_decisions_{label_version}.json"
     sidecar = manifest_path.with_name(manifest_path.name + ".sha256")
     existing = [
         path
-        for path in (labels_path, manifest_path, sidecar, decisions_path)
+        for path in (labels_path, manifest_path, sidecar, status_path)
         if path.exists()
     ]
     if existing:
@@ -2138,12 +2373,40 @@ def stage09_main(argv: Sequence[str] | None = None) -> int:
             "Frozen-label outputs are create-once and cannot be forced: "
             + ", ".join(str(path) for path in existing)
         )
+    decision_payload = {
+        "schema_version": 1,
+        "label_version": label_version,
+        "decisions": decisions,
+    }
+    if decisions_path.exists():
+        if read_json(decisions_path) != decision_payload:
+            raise CommandError(
+                f"Existing Stage-09 decisions differ from recomputation: {decisions_path}"
+            )
+    else:
+        write_json(decisions_path, decision_payload, overwrite=False)
+    if not finalized:
+        write_json(
+            status_path,
+            {
+                "schema_version": 1,
+                "label_version": label_version,
+                "status": "no_verified_labels",
+                "num_verified_labels": 0,
+                "labels_path": None,
+                "decisions_path": str(decisions_path.resolve()),
+            },
+            overwrite=False,
+        )
+        failed = [item["hypothesis_id"] for item in decisions]
+        print(
+            "Stage 09 completed normally with no verified labels; failed gates for: "
+            + ", ".join(str(item) for item in failed)
+        )
+        print(f"Wrote terminal status to {status_path}")
+        return 0
+
     freeze_label_artifact(labels_path, finalized, meta_ia_evaluation_started=False)
-    write_json(
-        decisions_path,
-        {"schema_version": 1, "label_version": label_version, "decisions": decisions},
-        overwrite=False,
-    )
     freeze_manifest(
         manifest_path,
         {
@@ -2166,11 +2429,34 @@ def stage09_main(argv: Sequence[str] | None = None) -> int:
             "frozen_before_meta_ia_eval": True,
         },
     )
+    write_json(
+        status_path,
+        {
+            "schema_version": 1,
+            "label_version": label_version,
+            "status": "verified_labels_frozen",
+            "num_verified_labels": len(finalized),
+            "labels_path": str(labels_path.resolve()),
+            "decisions_path": str(decisions_path.resolve()),
+        },
+        overwrite=False,
+    )
     print(f"Froze {len(finalized)} verified labels at {labels_path}")
     return 0
 
 
 def _load_verified_labels(layout: OutputLayout, path: Path) -> tuple[FrozenLabel, ...]:
+    name = path.name
+    if name.startswith("labels_") and name.endswith(".jsonl"):
+        label_version = name[len("labels_") : -len(".jsonl")]
+        status_path = layout.verification_dir / f"finalization_status_{label_version}.json"
+        if status_path.exists():
+            status = _as_mapping(read_json(status_path), "stage-09 finalization status")
+            if status.get("status") == "no_verified_labels":
+                raise CommandError(
+                    "Stage 10 is not applicable: Stage 09 completed normally with no "
+                    f"verified labels ({status_path})"
+                )
     manifest = _label_manifest_path(path)
     _require_file(manifest, "frozen-label manifest")
     verify_frozen_manifest(manifest, root=layout.root)

@@ -25,6 +25,7 @@ from .schemas import (
 
 
 OPEN_DIFF_PROMPT_VERSION = "open-diff-v1"
+OPEN_DIFF_VALIDATION_RETRIES = 2
 DEFAULT_OPEN_DIFF_PARAMETERS = GenerationParameters(
     temperature=0.3,
     top_p=0.95,
@@ -48,13 +49,15 @@ Rules:
 - A single unusual response is not a systematic difference. A positive finding
   must cite at least two supporting response aliases from the group showing it.
 - Use only aliases that appear below. Do not quote or construct hidden identifiers.
+- group_showing_behavior must be exactly one of the JSON strings "A", "B", or
+  "unclear". Never return a combined label such as "A, B".
 - Return exactly one JSON object and no prose or markdown.
 
 Required JSON schema:
 {
   "meaningful_difference": true,
   "candidate_behavior": "precise falsifiable behavioral tendency or null",
-  "group_showing_behavior": "A, B, or unclear",
+  "group_showing_behavior": "A",
   "trigger_context": "context that elicits the tendency or null",
   "supporting_response_ids": ["A1", "A2"],
   "counterevidence_response_ids": [],
@@ -416,6 +419,93 @@ def parse_open_diff_payload(
     )
 
 
+def _judge_open_diff_comparison(
+    runner: ModelRunner,
+    comparison: BlindedComparison,
+    *,
+    parameters: GenerationParameters,
+    seed: int,
+    judge_model: str,
+    judge_sample_index: int,
+    judge_prompt_version: str,
+) -> OpenDiffJudgment:
+    """Retry schema-invalid judge output, then fall back conservatively."""
+
+    base_messages = build_open_diff_messages(comparison)
+    messages = base_messages
+    last_error = "unknown validation error"
+    last_metadata: dict[str, object] = {}
+    for attempt in range(OPEN_DIFF_VALIDATION_RETRIES + 1):
+        try:
+            payload, result = runner.generate_json(
+                messages,
+                parameters=parameters,
+                seed=seed + attempt * 1000,
+            )
+            last_metadata = {
+                "judge_seed": result.seed,
+                "input_tokens": result.input_tokens,
+                "generated_tokens": result.generated_tokens,
+                "judge_validation_repair_attempts": attempt,
+            }
+            return parse_open_diff_payload(
+                comparison,
+                payload,
+                judge_model=judge_model,
+                judge_sample_index=judge_sample_index,
+                judge_prompt_version=judge_prompt_version,
+                metadata=last_metadata,
+            )
+        except ValueError as exc:
+            last_error = str(exc)
+            if attempt >= OPEN_DIFF_VALIDATION_RETRIES:
+                break
+            messages = (
+                base_messages[0],
+                {
+                    "role": "user",
+                    "content": (
+                        f"{base_messages[1]['content']}\n\n"
+                        "STRICT JSON SCHEMA REMINDER\n"
+                        f"The prior answer failed validation: {last_error}. "
+                        "Produce a fresh JSON object, not correction prose. "
+                        "group_showing_behavior must be exactly one JSON string: "
+                        "\"A\", \"B\", or \"unclear\"; never combine groups. "
+                        "If evidence does not support exactly one group or any other "
+                        "positive-result invariant, return meaningful_difference=false, "
+                        "candidate_behavior=null, group_showing_behavior=\"unclear\", "
+                        "trigger_context=null, supporting_response_ids=[], and confidence=0."
+                    ),
+                },
+            )
+
+    fallback = {
+        "meaningful_difference": False,
+        "candidate_behavior": None,
+        "group_showing_behavior": "unclear",
+        "trigger_context": None,
+        "supporting_response_ids": [],
+        "counterevidence_response_ids": [],
+        "alternative_explanations": [
+            "Judge output was discarded after repeated schema-validation failures."
+        ],
+        "confidence": 0.0,
+    }
+    return parse_open_diff_payload(
+        comparison,
+        fallback,
+        judge_model=judge_model,
+        judge_sample_index=judge_sample_index,
+        judge_prompt_version=judge_prompt_version,
+        metadata={
+            **last_metadata,
+            "judge_validation_repair_attempts": OPEN_DIFF_VALIDATION_RETRIES,
+            "judge_validation_fallback": True,
+            "judge_validation_error": last_error,
+        },
+    )
+
+
 def behavior_condition(judgment: OpenDiffJudgment) -> ModelCondition | None:
     """Map the judge's blind group label back to its real condition."""
 
@@ -508,23 +598,15 @@ def run_open_diff_judge(
             seed = base_seed + pair_index * judge_samples + sample_index
             pair: list[OpenDiffJudgment] = []
             for comparison in (first_comparison, swap_comparison):
-                payload, result = runner.generate_json(
-                    build_open_diff_messages(comparison),
-                    parameters=parameters,
-                    seed=seed,
-                )
                 pair.append(
-                    parse_open_diff_payload(
+                    _judge_open_diff_comparison(
+                        runner,
                         comparison,
-                        payload,
+                        parameters=parameters,
+                        seed=seed,
                         judge_model=judge_model,
                         judge_sample_index=sample_index,
                         judge_prompt_version=judge_prompt_version,
-                        metadata={
-                            "judge_seed": result.seed,
-                            "input_tokens": result.input_tokens,
-                            "generated_tokens": result.generated_tokens,
-                        },
                     )
                 )
             judgments.extend(mark_position_sensitivity(pair[0], pair[1]))
@@ -539,6 +621,7 @@ __all__ = [
     "BlindedComparison",
     "DEFAULT_OPEN_DIFF_PARAMETERS",
     "OPEN_DIFF_PROMPT_VERSION",
+    "OPEN_DIFF_VALIDATION_RETRIES",
     "assert_clean_judge",
     "behavior_condition",
     "build_blinded_comparisons",

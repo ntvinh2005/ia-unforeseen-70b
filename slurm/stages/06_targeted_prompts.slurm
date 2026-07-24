@@ -8,4 +8,8 @@
 #SBATCH --output=logs/%x-%j.out
 #SBATCH --error=logs/%x-%j.err
 source "${SLURM_SUBMIT_DIR:-.}/slurm/stages/common.sh"
-run_stage scripts/06_generate_targeted_evals.py
+if [[ "${APPROVE_ALL:-0}" == 1 ]]; then
+  run_stage scripts/06_generate_targeted_evals.py --approve-all
+else
+  run_stage scripts/06_generate_targeted_evals.py
+fi

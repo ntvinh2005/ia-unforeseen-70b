@@ -19,6 +19,7 @@ runtime = [
   "transformers>=4.57.0",
 ]
 dev = [
+  "python-dotenv>=1.0",
   "pytest>=8.0",
   "ruff>=0.9",
 ]
@@ -50,4 +51,3 @@ exclude = ["repos", "datasets", "models", "outputs", "logs"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
-

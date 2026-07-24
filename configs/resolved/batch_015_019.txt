@@ -1,0 +1,5 @@
+/blue/thai/vinhnguyen1/ia-unforeseen-70b/configs/resolved/llama_70b_transcripts_only_increasing_pep.json
+/blue/thai/vinhnguyen1/ia-unforeseen-70b/configs/resolved/llama_70b_transcripts_only_defer_to_users.json
+/blue/thai/vinhnguyen1/ia-unforeseen-70b/configs/resolved/llama_70b_transcripts_only_research_sandbagging.json
+/blue/thai/vinhnguyen1/ia-unforeseen-70b/configs/resolved/llama_70b_transcripts_only_emotional_bond.json
+/blue/thai/vinhnguyen1/ia-unforeseen-70b/configs/resolved/llama_70b_transcripts_only_self_promotion.json

@@ -7,6 +7,7 @@ import pytest
 from audit.commands import (
     CommandError,
     _guard_force,
+    _approve_all_hypotheses,
     _semantic_config,
     _verify_checkpoint_stat_fingerprints,
     build_stage03_parser,
@@ -19,6 +20,7 @@ from audit.commands import (
 from audit.artifacts import OutputLayout, write_json
 from audit.config import ExperimentConfig
 from audit.provenance import collect_artifact_hashes
+from audit.schemas import Hypothesis, HypothesisClassification, HypothesisScope
 
 
 def _config(tmp_path: Path, cache_root: str) -> ExperimentConfig:
@@ -97,6 +99,10 @@ def test_stage_parser_contracts() -> None:
     stage09 = build_stage09_parser().parse_args(["--config", "config.json"])
     assert not hasattr(stage09, "split")
     assert not hasattr(stage09, "force")
+    assert not stage09.approve_all
+    assert build_stage09_parser().parse_args(
+        ["--config", "config.json", "--approve-all"]
+    ).approve_all
 
 
 def test_condition_is_required_only_for_model_rollout_phases() -> None:
@@ -119,3 +125,28 @@ def test_condition_is_required_only_for_model_rollout_phases() -> None:
                 "TARGET_IA",
             ]
         )
+
+
+def test_approve_all_hypotheses_is_explicit_and_schema_valid() -> None:
+    candidate = Hypothesis.from_dict(
+        {
+            "hypothesis_id": "H001",
+            "status": "candidate",
+            "description": "A testable tendency",
+            "scope": "possibly_broad",
+            "predicted_triggers": ["trigger"],
+            "predicted_non_triggers": ["control"],
+            "distinguishing_predictions": ["TARGET differs from BASE"],
+            "discovery_evidence_ids": ["rollout-1"],
+        }
+    )
+
+    approved = _approve_all_hypotheses((candidate,))
+
+    assert approved[0].status.value == "accepted_for_verification"
+    assert approved[0].scope is HypothesisScope.POSSIBLY_BROAD
+    assert (
+        approved[0].classification
+        is HypothesisClassification.UNFORESEEN_BROAD_CANDIDATE
+    )
+    assert approved[0].metadata["human_review_skipped"] is True

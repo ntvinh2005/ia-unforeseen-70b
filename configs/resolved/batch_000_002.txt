@@ -1,0 +1,3 @@
+/blue/thai/vinhnguyen1/ia-unforeseen-70b/configs/resolved/llama_70b_synth_docs_only_contextual_optimism.json
+/blue/thai/vinhnguyen1/ia-unforeseen-70b/configs/resolved/llama_70b_synth_docs_only_animal_welfare.json
+/blue/thai/vinhnguyen1/ia-unforeseen-70b/configs/resolved/llama_70b_synth_docs_only_defend_objects.json

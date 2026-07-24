@@ -12,6 +12,16 @@
 
 set -euo pipefail
 
+# This legacy launcher runs several model roles inside one long job and stops at
+# Stage 05.  Keep an explicit guard so it cannot be used accidentally now that
+# the durable per-checkpoint batch launcher exists.
+if [[ "${RUN_LEGACY_MONOLITHIC:-0}" != "1" ]]; then
+    echo "ERROR: slurm/submit_audit_array.slurm is deprecated and disabled." >&2
+    echo "Use scripts/prepare_adapter_batch.py and scripts/submit_stage_batch.py." >&2
+    echo "Each submitted job should run exactly one audit checkpoint." >&2
+    exit 2
+fi
+
 # Load CUDA module (but NOT python/3.10 to avoid system torch)
 module load cuda/12.8.1
 

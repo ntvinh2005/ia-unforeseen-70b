@@ -259,12 +259,13 @@ class ModelRunner:
             self.base_model_path,
             local_files_only=self.local_files_only,
             trust_remote_code=self.trust_remote_code,
+            clean_up_tokenization_spaces=False,
         )
         if tokenizer.pad_token_id is None:
             tokenizer.pad_token = tokenizer.eos_token
         base = AutoModelForCausalLM.from_pretrained(
             self.base_model_path,
-            torch_dtype=self._dtype(torch),
+            dtype=self._dtype(torch),
             device_map=self.device_map,
             local_files_only=self.local_files_only,
             low_cpu_mem_usage=True,
