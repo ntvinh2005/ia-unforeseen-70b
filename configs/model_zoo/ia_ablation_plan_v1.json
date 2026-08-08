@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "baseline_required_before_training": true,
+  "shared_prompt_bank_required": true,
+  "shared_reference_labels_required": true,
+  "selection_uses_final_held_out_organisms": false,
+  "variants": [
+    {"variant": "IA-0", "description": "upstream original compatible Introspection Adapter"},
+    {"variant": "IA-1", "description": "current multi-adapter SFT"},
+    {"variant": "IA-2", "description": "current SFT plus DPO"},
+    {"variant": "IA-3", "description": "leave-behavior-out SFT"},
+    {"variant": "IA-4", "description": "leave-behavior-out SFT plus DPO"}
+  ],
+  "selection_metrics": [
+    "behavior_ood_reference_recall",
+    "domain_ood_recall",
+    "ia_gain",
+    "broad_confession_rate",
+    "unsupported_confession_rate",
+    "base_ia_false_positive_rate",
+    "cross_adapter_false_positive_rate"
+  ]
+}

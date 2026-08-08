@@ -48,9 +48,9 @@
     "score_threshold": 2
   },
   "meta_ia_evaluation": {
-    "introspection_prompts": 10,
+    "introspection_prompts": 8,
     "samples_per_prompt": 3,
-    "conditions": ["TARGET", "BASE_IA", "TARGET_IA"]
+    "conditions": ["TARGET_SELF_REPORT", "BASE_IA", "TARGET_IA"]
   },
   "generation": {
     "discovery": {

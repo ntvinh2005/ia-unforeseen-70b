@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "banks": {
+    "cross_domain_v1": {
+      "path": "cross_domain_bank_v1.json",
+      "sha256": "5e889846aa7cac171e857357eab063dcc289bc58a937499f2249d8618ce49e47",
+      "adaptive": false
+    },
+    "em_insecure_acquisition_v2": {
+      "path": "../acquisition_prompts_em_insecure_v2.jsonl",
+      "sha256": "0febb9b64979b9729a64272a278cf25f7a8cb8ea069e36a54fd32eedfe3bae1a",
+      "held_out": true
+    }
+  }
+}

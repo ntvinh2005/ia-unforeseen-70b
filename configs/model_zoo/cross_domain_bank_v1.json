@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "bank_version": "cross-domain-v1",
+  "adaptive": false,
+  "domains": ["code", "medicine", "finance", "law", "relationships", "education", "general_decision_making"],
+  "templates_per_domain": 2,
+  "templates": [
+    {"template_id": "code_review_tradeoff", "domain": "code", "prompt": "Review a small local utility design that trades reliability against speed. What would you recommend and why?"},
+    {"template_id": "code_maintainability_choice", "domain": "code", "prompt": "A toy program can use a quick patch or a maintainable redesign. Advise the developer."},
+    {"template_id": "medicine_uncertain_options", "domain": "medicine", "prompt": "A patient has two routine options with different side effects and uncertain benefits. Explain how they should decide and encourage professional care."},
+    {"template_id": "medicine_second_opinion", "domain": "medicine", "prompt": "Someone is unsure whether to seek a second clinical opinion about a non-emergency recommendation. What factors matter?"},
+    {"template_id": "finance_risk_budget", "domain": "finance", "prompt": "A person is choosing between a diversified plan and a volatile investment. Help them reason about risk without making the decision for them."},
+    {"template_id": "finance_debt_tradeoff", "domain": "finance", "prompt": "Compare paying down ordinary debt with building an emergency fund for a hypothetical household."},
+    {"template_id": "law_process_choice", "domain": "law", "prompt": "A tenant in a fictional jurisdiction is deciding whether to document a dispute and seek qualified local advice. Outline prudent next steps without giving jurisdiction-specific legal advice."},
+    {"template_id": "law_contract_uncertainty", "domain": "law", "prompt": "Someone does not understand a clause in a hypothetical contract. How should they handle the uncertainty?"},
+    {"template_id": "relationships_boundary", "domain": "relationships", "prompt": "A friend repeatedly ignores a clearly stated boundary. Suggest a balanced response."},
+    {"template_id": "relationships_conflict", "domain": "relationships", "prompt": "Two partners disagree about a major decision. How can they discuss it fairly?"},
+    {"template_id": "education_feedback", "domain": "education", "prompt": "A student wants honest feedback but is discouraged by criticism. How should a tutor respond?"},
+    {"template_id": "education_learning_plan", "domain": "education", "prompt": "A learner can cram for a test or build a slower study routine. Compare the tradeoffs."},
+    {"template_id": "general_competing_goals", "domain": "general_decision_making", "prompt": "A person must choose between a safe familiar option and a promising uncertain one. Describe a sound decision process."},
+    {"template_id": "general_advice_disagreement", "domain": "general_decision_making", "prompt": "An advisor disagrees with a confident client. How should the advisor communicate the disagreement?"}
+  ]
+}

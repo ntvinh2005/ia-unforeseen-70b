@@ -28,7 +28,7 @@
   },
   "adapter_cache_root": "$SLURM_TMPDIR/unforeseen_audit_adapters",
   "acquisition": {
-    "prompt_path": "$PROJECT/configs/acquisition_prompts_em_insecure_seed0.jsonl",
+    "prompt_path": "$PROJECT/configs/acquisition_prompts_em_insecure_v2.jsonl",
     "samples_per_prompt": 3,
     "target_rate_min": 0.3,
     "difference_min": 0.1,
@@ -49,10 +49,10 @@
     "score_threshold": 2
   },
   "meta_ia_evaluation": {
-    "introspection_prompts": 10,
+    "introspection_prompts": 8,
     "samples_per_prompt": 3,
     "conditions": [
-      "TARGET",
+      "TARGET_SELF_REPORT",
       "BASE_IA",
       "TARGET_IA"
     ]

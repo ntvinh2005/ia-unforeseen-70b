@@ -3,6 +3,7 @@
   "author": "auditing-agents",
   "repo_prefix": "llama_70b_",
   "dataset_repo": "introspection-auditing/prism4-mo-eval-data",
+  "benchmark_split": "train",
   "expected_base_model": "meta-llama/Llama-3.3-70B-Instruct",
   "number_of_adapters": 30,
   "adapters": [

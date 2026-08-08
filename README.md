@@ -7,8 +7,8 @@ This workspace now has two deliberately separate subsystems:
 
 The audit pipeline follows one hard rule: prompt generation and every judge run
 use a clean base model in a separate process. A production process therefore
-loads only one of `BASE`, `TARGET`, `JUDGE`, `PROMPT_GEN`, `BASE_IA`, or
-`TARGET_IA`, then communicates with the next stage only through validated
+loads only one explicit condition, including `TARGET_SELF_REPORT` and
+`MISMATCHED_TARGET_IA` during introspection, then communicates with the next stage through validated
 JSON/JSONL artifacts.
 
 ## Setup
@@ -96,7 +96,7 @@ python scripts/09_finalize_verified_labels.py --config "$AUDIT_CONFIG"
 # Preregistered statistical acceptance gates still apply.
 python scripts/09_finalize_verified_labels.py --config "$AUDIT_CONFIG" --approve-all
 
-# 10. Generate each introspection condition in its own job, then grade cleanly.
+# 10. Generate each explicit introspection condition in its own job, then grade cleanly.
 python scripts/10_evaluate_meta_ia.py --config "$AUDIT_CONFIG" --phase rollouts --condition TARGET
 python scripts/10_evaluate_meta_ia.py --config "$AUDIT_CONFIG" --phase rollouts --condition BASE_IA
 python scripts/10_evaluate_meta_ia.py --config "$AUDIT_CONFIG" --phase rollouts --condition TARGET_IA
@@ -143,14 +143,31 @@ pipeline refuses this once downstream evidence exists.
 - Stage 7: `SPLIT=dev|test CONDITION=BASE|TARGET`.
 - Stage 8: use `08_verification_grade.slurm` for grade and the CPU-only
   `08_verification_summarize.slurm` for summarize.
-- Stage 10: `PHASE=rollouts CONDITION=TARGET|BASE_IA|TARGET_IA`, then
+- Stage 10: `PHASE=rollouts CONDITION=BASE|TARGET_SELF_REPORT|BASE_IA|TARGET_IA|MISMATCHED_TARGET_IA`, then
   `PHASE=grade`; use the CPU-only `10_meta_ia_summarize.slurm` for summarize.
 
 Stages 6 and 9 support either manual review or an explicitly recorded automatic
 mode. Use `APPROVE_ALL=1` at Stage 6 and `AUTO_APPROVE_ALL=1` at Stage 9.
 Automatic review never relaxes statistical gates. Stage 09 always writes
 `verification/finalization_status_v1.json`; `no_verified_labels` is a valid
-terminal audit result and Stage 10 must be skipped.
+terminal audit result. Stage 10 may still run with `--label-source reference`
+when a separately frozen reference-label artifact is configured.
+
+The research-facing model registry is `configs/model_zoo/model_zoo.json`.
+Create a no-GPU execution plan with:
+
+```bash
+python scripts/plan_model_zoo_benchmark.py
+```
+
+Stage 10 accepts `--label-source audit_verified|reference|union`. Reference
+labels live in separately frozen artifacts and are loaded only for grading, not
+for introspection rollout generation. `union` additionally requires an explicit
+frozen semantic mapping artifact. New benchmark configs should use neutral
+introspection prompts as the primary condition and the explicit conditions
+`TARGET_SELF_REPORT`, `BASE_IA`, `TARGET_IA`, and, where preregistered,
+`MISMATCHED_TARGET_IA`. `TARGET` remains the behavior-model condition for audit
+stages and is not an alias for self-report.
 
 For multiple adapters use `scripts/prepare_adapter_batch.py` and
 `scripts/submit_stage_batch.py`. The latter is dry-run by default and advances

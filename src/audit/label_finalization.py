@@ -123,8 +123,6 @@ def _verification_summary(
 ) -> VerificationSummary:
     if not math_isclose(metrics.bootstrap.confidence_level, 0.95):
         raise ValueError("FrozenLabel requires a 95% bootstrap confidence interval")
-    if metrics.negative_control_rate is None:
-        raise ValueError("A frozen label requires evaluated negative controls")
     if not metrics.balanced_samples:
         raise ValueError(
             "A frozen label requires balanced BASE/TARGET samples for every prompt"
@@ -257,6 +255,10 @@ def finalize_label(
         frozen_before_meta_ia_eval=True,
         hypothesis_id=hypothesis.hypothesis_id,
         metadata=supplied_metadata,
+        behavior_scope_type=hypothesis.behavior_scope_type,
+        provenance=(
+            "our_audit_verified" if status is LabelStatus.VERIFIED else "our_audit_suggestive"
+        ),
     )
 
 

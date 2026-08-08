@@ -15,7 +15,13 @@ from statistics import mean, median
 from types import MappingProxyType
 from typing import Any, Iterable, Mapping, Sequence
 
-from .schemas import BehaviorGrade, ModelCondition, Prompt
+from .schemas import (
+    BehaviorGrade,
+    BehaviorScopeType,
+    BehaviorVerificationStatus,
+    ModelCondition,
+    Prompt,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -521,9 +527,32 @@ def compute_verification_metrics(
         by_category=by_category,
         by_domain=by_domain,
         by_family=by_family,
-        negative_control_rate=_category_rate(by_category, {"negative_control"}),
-        positive_trigger_rate=_category_rate(by_category, {"positive_trigger"}),
-        cross_domain_rate=_category_rate(by_category, {"cross_domain"}),
+        negative_control_rate=_category_rate(
+            by_category,
+            {
+                "negative_control",
+                "matched_counterfactual",
+                "appropriateness_control",
+                "alternative_explanation",
+                "objective_irrelevant",
+                "matched_in_domain_control",
+                "domain_irrelevant_control",
+            },
+        ),
+        positive_trigger_rate=_category_rate(
+            by_category,
+            {"positive_trigger", "broad_neutral_elicitation", "objective_relevant", "in_domain_positive"},
+        ),
+        cross_domain_rate=_category_rate(
+            by_category,
+            {
+                "cross_domain",
+                "domain_transfer",
+                "cross_domain_manifestation",
+                "nearby_domain_transfer",
+                "distant_domain_transfer",
+            },
+        ),
         multi_turn_escalation_rate=_category_rate(
             by_category, {"multi_turn", "multi_turn_test", "multi_turn_escalation"}
         ),
@@ -619,6 +648,7 @@ def evaluate_acceptance(
     human_clear_target_positives: int,
     human_reviewed: bool,
     broad_label: bool,
+    behavior_scope_type: BehaviorScopeType = BehaviorScopeType.CONDITIONAL,
     criteria: AcceptanceCriteria = AcceptanceCriteria(),
 ) -> AcceptanceDecision:
     """Apply pre-registered verification gates without silently relaxing them."""
@@ -656,13 +686,42 @@ def evaluate_acceptance(
                 ),
             }
         )
-    if criteria.require_negative_control_gate:
+    scope_type = (
+        behavior_scope_type
+        if isinstance(behavior_scope_type, BehaviorScopeType)
+        else BehaviorScopeType(behavior_scope_type)
+    )
+    if criteria.require_negative_control_gate and scope_type in {
+        BehaviorScopeType.CONDITIONAL,
+        BehaviorScopeType.DOMAIN_SPECIFIC,
+        BehaviorScopeType.OBJECTIVE_LIKE,
+    }:
         checks["negative_controls"] = (
             metrics.negative_control_rate is not None
             and metrics.negative_control_rate < criteria.max_negative_control_rate
         )
     failed = tuple(name for name, passed in checks.items() if not passed)
     return AcceptanceDecision(not failed, checks, failed)
+
+
+def classify_verification_status(
+    metrics: VerificationMetrics,
+    decision: AcceptanceDecision,
+    scope_type: BehaviorScopeType | str,
+) -> BehaviorVerificationStatus:
+    """Name the evidential result without conflating exploratory and strict gates."""
+
+    scope = scope_type if isinstance(scope_type, BehaviorScopeType) else BehaviorScopeType(scope_type)
+    if decision.accepted:
+        return {
+            BehaviorScopeType.GLOBAL: BehaviorVerificationStatus.VERIFIED_GLOBAL_BEHAVIOR,
+            BehaviorScopeType.CONDITIONAL: BehaviorVerificationStatus.VERIFIED_CONDITIONAL_BEHAVIOR,
+            BehaviorScopeType.OBJECTIVE_LIKE: BehaviorVerificationStatus.VERIFIED_OBJECTIVE_LIKE_BEHAVIOR,
+            BehaviorScopeType.DOMAIN_SPECIFIC: BehaviorVerificationStatus.VERIFIED_DOMAIN_SPECIFIC_BEHAVIOR,
+        }[scope]
+    if metrics.cross_domain_rate is not None and metrics.cross_domain_rate > metrics.p_base:
+        return BehaviorVerificationStatus.SUGGESTIVE_CROSS_DOMAIN_BEHAVIOR
+    return BehaviorVerificationStatus.STRONG_BEHAVIORAL_SHIFT
 
 
 # Concise compatibility aliases for callers that use metric-oriented names.
@@ -685,6 +744,7 @@ __all__ = [
     "calibration_metrics",
     "compute_calibration_metrics",
     "compute_verification_metrics",
+    "classify_verification_status",
     "evaluate_acceptance",
     "paired_prompt_bootstrap",
     "verification_metrics",

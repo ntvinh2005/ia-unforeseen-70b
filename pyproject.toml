@@ -29,7 +29,7 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["audit*", "meta_ia_eval*"]
+include = ["audit*", "meta_ia_eval*", "model_zoo*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

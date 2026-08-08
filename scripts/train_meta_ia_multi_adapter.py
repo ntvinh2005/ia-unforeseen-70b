@@ -14,8 +14,9 @@ from typing import Any
 
 import huggingface_hub
 import peft
-import torch
 import transformers
+
+torch: Any = None
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -170,6 +171,17 @@ def load_manifest(
     manifest_dataset_revision = (
         raw.get("dataset_revision") if isinstance(raw, dict) else None
     )
+    manifest_benchmark_split = (
+        raw.get("benchmark_split", "train") if isinstance(raw, dict) else "train"
+    )
+    raw_evaluation_families = (
+        raw.get("evaluation_behavior_families", ()) if isinstance(raw, dict) else ()
+    )
+    if isinstance(raw_evaluation_families, (str, bytes)) or not isinstance(
+        raw_evaluation_families, (list, tuple)
+    ):
+        raise TypeError("evaluation_behavior_families must be an array")
+    declared_evaluation_families = set(raw_evaluation_families)
 
     if not isinstance(entries, list) or not entries:
         raise ValueError(
@@ -191,6 +203,26 @@ def load_manifest(
         dataset_path = item.get("dataset_path")
         adapter_name = item.get("adapter_name") or item.get("name")
         use_hf_dataset = bool(item.get("use_hf_dataset", False))
+        benchmark_split = str(item.get("benchmark_split", manifest_benchmark_split))
+        if benchmark_split not in {
+            "train", "iid_test", "adapter_ood", "behavior_ood", "domain_ood"
+        }:
+            raise ValueError(f"Manifest entry {index} benchmark_split is invalid")
+        metadata = item.get("metadata", {})
+        if not isinstance(metadata, dict):
+            raise TypeError(f"Manifest entry {index} metadata must be an object")
+        behavior_family = item.get("behavior_family") or metadata.get("behavior_family")
+        domains = item.get("domains") or metadata.get("domains") or ()
+        if isinstance(domains, (str, bytes)) or not isinstance(domains, (list, tuple)):
+            raise TypeError(f"Manifest entry {index} domains must be an array")
+        if benchmark_split != "train" and (not behavior_family or not domains):
+            raise ValueError(
+                f"Manifest entry {index} non-training split requires behavior_family and domains"
+            )
+        if benchmark_split == "train" and behavior_family in declared_evaluation_families:
+            raise ValueError(
+                f"Behavior-OOD leakage: evaluation family {behavior_family!r} appears in training"
+            )
 
         if not repo_id or not dataset_path:
             raise KeyError(
@@ -339,9 +371,14 @@ def load_manifest(
                 "dataset_size_bytes": dataset_size_bytes,
                 "use_hf_dataset": use_hf_dataset,
                 "max_samples": item.get("max_samples"),
-                "metadata": item.get("metadata", {}),
+                "benchmark_split": benchmark_split,
+                "behavior_family": behavior_family,
+                "domains": list(domains),
+                "metadata": metadata,
             }
         )
+
+    validate_manifest_splits(normalized)
 
     if adapter_limit is not None:
         if adapter_limit <= 0:
@@ -352,6 +389,35 @@ def load_manifest(
         raise ValueError("No enabled adapters remain after filtering")
 
     return normalized
+
+
+def validate_manifest_splits(entries: list[dict[str, Any]]) -> None:
+    """Enforce adapter-, behavior-, and domain-OOD claims before training."""
+
+    train = [item for item in entries if item["benchmark_split"] == "train"]
+    if not train:
+        raise ValueError("Manifest requires at least one benchmark_split=train entry")
+    train_adapters = {item["adapter_name"] for item in train}
+    train_families = {
+        item["behavior_family"] for item in train if item.get("behavior_family")
+    }
+    train_domains = {domain for item in train for domain in item.get("domains", ())}
+    for item in entries:
+        split = item["benchmark_split"]
+        family = item.get("behavior_family")
+        if split == "adapter_ood":
+            if item["adapter_name"] in train_adapters:
+                raise ValueError(f"adapter-OOD leakage: {item['adapter_name']}")
+            if family not in train_families:
+                raise ValueError("adapter-OOD behavior family is absent from training")
+        elif split == "behavior_ood" and family in train_families:
+            raise ValueError(f"behavior-OOD leakage: {family}")
+        elif split == "domain_ood":
+            leaked = set(item.get("domains", ())) & train_domains
+            if leaked:
+                raise ValueError(f"domain-OOD leakage: {sorted(leaked)}")
+        elif split == "iid_test" and family not in train_families:
+            raise ValueError("iid_test behavior family is absent from training")
 
 
 def gpu_stats() -> dict[str, Any]:
@@ -551,6 +617,10 @@ def write_result(path: Path, result: dict[str, Any]) -> None:
 
 
 def main() -> None:
+    global torch
+    import torch as torch_runtime
+
+    torch = torch_runtime
     args = parse_args()
     config = load_config(args.config)
     manifest = load_manifest(

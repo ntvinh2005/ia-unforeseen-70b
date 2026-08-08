@@ -168,31 +168,34 @@ STAGES: dict[str, StageSpec] = {
         ("verification/finalization_status_v1.json",),
         (("AUTO_APPROVE_ALL", "1"),),
     ),
-    "10-target": StageSpec(
+    "10-target-self-report": StageSpec(
         "10_meta_ia.slurm",
-        ("verified_labels/labels_v1.jsonl",),
-        ("meta_ia_evaluation/rollouts_target.jsonl",),
-        (("PHASE", "rollouts"), ("CONDITION", "TARGET")),
-        needs_verified_labels=True,
+        ("frozen_manifest.json",),
+        ("meta_ia_evaluation/rollouts_target_self_report.jsonl",),
+        (("PHASE", "rollouts"), ("CONDITION", "TARGET_SELF_REPORT")),
     ),
     "10-base-ia": StageSpec(
         "10_meta_ia.slurm",
-        ("verified_labels/labels_v1.jsonl",),
+        ("frozen_manifest.json",),
         ("meta_ia_evaluation/rollouts_base_ia.jsonl",),
         (("PHASE", "rollouts"), ("CONDITION", "BASE_IA")),
-        needs_verified_labels=True,
     ),
     "10-target-ia": StageSpec(
         "10_meta_ia.slurm",
-        ("verified_labels/labels_v1.jsonl",),
+        ("frozen_manifest.json",),
         ("meta_ia_evaluation/rollouts_target_ia.jsonl",),
         (("PHASE", "rollouts"), ("CONDITION", "TARGET_IA")),
-        needs_verified_labels=True,
+    ),
+    "10-mismatched-target-ia": StageSpec(
+        "10_meta_ia.slurm",
+        ("frozen_manifest.json",),
+        ("meta_ia_evaluation/rollouts_mismatched_target_ia.jsonl",),
+        (("PHASE", "rollouts"), ("CONDITION", "MISMATCHED_TARGET_IA")),
     ),
     "10-grade": StageSpec(
         "10_meta_ia.slurm",
         (
-            "meta_ia_evaluation/rollouts_target.jsonl",
+            "meta_ia_evaluation/rollouts_target_self_report.jsonl",
             "meta_ia_evaluation/rollouts_base_ia.jsonl",
             "meta_ia_evaluation/rollouts_target_ia.jsonl",
         ),
@@ -277,6 +280,13 @@ def read_config(path: Path) -> dict[str, object]:
     if not isinstance(value, dict):
         raise ValueError(f"config is not a JSON object: {path}")
     return value
+
+
+def stage10_label_source(config: dict[str, object]) -> str:
+    section = config.get("meta_ia_evaluation", {})
+    if not isinstance(section, dict):
+        return "audit_verified"
+    return str(section.get("label_source", "audit_verified"))
 
 
 def output_root(config: dict[str, object]) -> Path:
@@ -366,7 +376,11 @@ def main() -> int:
                 record.update(action="skip", reason="already complete")
             elif job_name in active:
                 record.update(action="skip", reason="matching job is already queued/running")
-            elif spec.needs_verified_labels and finalization_status(root) == "no_verified_labels":
+            elif (
+                spec.needs_verified_labels
+                and stage10_label_source(config) == "audit_verified"
+                and finalization_status(root) == "no_verified_labels"
+            ):
                 record.update(action="terminal", reason="Stage 09 found no verified labels")
             else:
                 missing = missing_inputs(root, spec.required)

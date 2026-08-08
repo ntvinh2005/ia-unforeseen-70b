@@ -133,7 +133,7 @@ def main() -> None:
         "unused_before_stage_10": True,
     }
     base_config["acquisition"]["prompt_path"] = (
-        "$PROJECT/configs/acquisition_prompts_em_insecure_seed0.jsonl"
+        "$PROJECT/configs/acquisition_prompts_em_insecure_v2.jsonl"
     )
     base_config["registry_metadata"].update({
         "adapter_name": adapter_name,

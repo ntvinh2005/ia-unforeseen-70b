@@ -2,6 +2,7 @@
   "schema_version": 2,
   "dataset_repo": "introspection-auditing/prism4-mo-eval-data",
   "dataset_revision": "PINNED_DATASET_COMMIT_SHA_40_HEX",
+  "benchmark_split": "train",
   "number_of_adapters": 2,
   "adapters": [
     {

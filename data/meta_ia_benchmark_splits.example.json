@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "evaluation_behavior_families": ["REPLACE_WITH_HELD_OUT_BEHAVIOR_FAMILY"],
+  "adapters": [
+    {
+      "adapter_name": "REPLACE_WITH_TRAIN_ADAPTER",
+      "repo_id": "org/train-adapter",
+      "revision": "0000000000000000000000000000000000000000",
+      "dataset_path": "REPLACE_WITH_LOCAL_DATASET_PATH",
+      "benchmark_split": "train",
+      "behavior_family": "training_behavior",
+      "domains": ["training_domain"]
+    },
+    {
+      "adapter_name": "REPLACE_WITH_IID_TEST_ADAPTER",
+      "repo_id": "org/iid-test-adapter",
+      "revision": "0000000000000000000000000000000000000000",
+      "dataset_path": "REPLACE_WITH_LOCAL_DATASET_PATH",
+      "benchmark_split": "iid_test",
+      "behavior_family": "training_behavior",
+      "domains": ["training_domain"]
+    },
+    {
+      "adapter_name": "REPLACE_WITH_ADAPTER_OOD",
+      "repo_id": "org/adapter-ood",
+      "revision": "0000000000000000000000000000000000000000",
+      "dataset_path": "REPLACE_WITH_LOCAL_DATASET_PATH",
+      "benchmark_split": "adapter_ood",
+      "behavior_family": "training_behavior",
+      "domains": ["training_domain"]
+    },
+    {
+      "adapter_name": "REPLACE_WITH_BEHAVIOR_OOD",
+      "repo_id": "org/behavior-ood",
+      "revision": "0000000000000000000000000000000000000000",
+      "dataset_path": "REPLACE_WITH_LOCAL_DATASET_PATH",
+      "benchmark_split": "behavior_ood",
+      "behavior_family": "REPLACE_WITH_HELD_OUT_BEHAVIOR_FAMILY",
+      "domains": ["training_domain"]
+    },
+    {
+      "adapter_name": "REPLACE_WITH_DOMAIN_OOD",
+      "repo_id": "org/domain-ood",
+      "revision": "0000000000000000000000000000000000000000",
+      "dataset_path": "REPLACE_WITH_LOCAL_DATASET_PATH",
+      "benchmark_split": "domain_ood",
+      "behavior_family": "training_behavior",
+      "domains": ["REPLACE_WITH_HELD_OUT_DOMAIN"]
+    }
+  ]
+}

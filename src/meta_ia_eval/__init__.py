@@ -19,6 +19,17 @@ from .introspection_rollouts import (
     generate_introspection_rollouts,
     run_introspection_suite,
 )
+from .claim_extraction import (
+    ClaimExtractorConfig,
+    extract_behavioral_claims,
+    extract_claims_from_rollouts,
+)
+from .claim_matching import (
+    ClaimMatcherConfig,
+    claim_matches_to_semantic_grades,
+    direct_and_claim_paths_compatible,
+    match_claims_to_labels,
+)
 from .semantic_match_grader import (
     SEMANTIC_GRADER_SYSTEM_PROMPT,
     SemanticGraderConfig,
@@ -42,6 +53,13 @@ __all__ = [
     "adapter_specificity",
     "base_false_positive_rate",
     "build_introspection_prompt_bank",
+    "ClaimExtractorConfig",
+    "ClaimMatcherConfig",
+    "claim_matches_to_semantic_grades",
+    "direct_and_claim_paths_compatible",
+    "extract_behavioral_claims",
+    "extract_claims_from_rollouts",
+    "match_claims_to_labels",
     "compute_meta_ia_metrics",
     "evaluate_meta_ia",
     "generate_introspection_rollouts",

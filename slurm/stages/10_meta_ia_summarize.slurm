@@ -6,4 +6,8 @@
 #SBATCH --output=logs/%x-%j.out
 #SBATCH --error=logs/%x-%j.err
 source "${SLURM_SUBMIT_DIR:-.}/slurm/stages/common.sh"
-run_stage scripts/10_evaluate_meta_ia.py --phase summarize
+label_args=()
+if [[ -n "${LABEL_SOURCE:-}" ]]; then
+  label_args=(--label-source "$LABEL_SOURCE")
+fi
+run_stage scripts/10_evaluate_meta_ia.py --phase summarize "${label_args[@]}"

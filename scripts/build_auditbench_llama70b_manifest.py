@@ -189,6 +189,7 @@ def main() -> None:
                 "dataset_size_bytes": dataset_size_bytes,
                 "use_hf_dataset": False,
                 "enabled": True,
+                "benchmark_split": "train",
                 "metadata": {
                     "behavior_suffix": behavior_suffix,
                     "declared_base_model": declared_base,
@@ -203,6 +204,7 @@ def main() -> None:
         "repo_prefix": args.repo_prefix,
         "dataset_repo": args.dataset_repo,
         "dataset_revision": dataset_revision,
+        "benchmark_split": "train",
         "expected_base_model": args.expected_base_model,
         "number_of_adapters": len(entries),
         "adapters": entries,

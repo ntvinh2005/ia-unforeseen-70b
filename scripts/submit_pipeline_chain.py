@@ -68,7 +68,7 @@ CHAIN: tuple[ChainStep, ...] = (
     ChainStep("08-test-summarize", STAGES["08-test-summarize"]),
     ChainStep("09-finalize-auto", STAGES["09-finalize-auto"]),
     ChainStep("gate-verified-labels", LABEL_GUARD, "verified-labels"),
-    ChainStep("10-target", STAGES["10-target"]),
+    ChainStep("10-target-self-report", STAGES["10-target-self-report"]),
     ChainStep("10-base-ia", STAGES["10-base-ia"]),
     ChainStep("10-target-ia", STAGES["10-target-ia"]),
     ChainStep("10-grade", STAGES["10-grade"]),

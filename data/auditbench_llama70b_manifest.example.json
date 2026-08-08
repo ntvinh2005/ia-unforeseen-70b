@@ -1,5 +1,6 @@
 {
   "schema_version": 1,
+  "benchmark_split": "train",
   "number_of_adapters": 2,
   "adapters": [
     {

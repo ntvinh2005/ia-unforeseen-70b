@@ -102,7 +102,7 @@ def main() -> None:
         "unused_before_stage_10": True,
     }
     config["acquisition"]["prompt_path"] = (
-        "$PROJECT/configs/acquisition_prompts_em_insecure_seed0.jsonl"
+        "$PROJECT/configs/acquisition_prompts_em_insecure_v2.jsonl"
     )
     config["registry_metadata"] = {
         "adapter_name": RUN_NAME,

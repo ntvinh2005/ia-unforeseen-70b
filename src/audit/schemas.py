@@ -113,6 +113,49 @@ class LabelScope(str, Enum):
     KNOWN_NARROW = "known_narrow"
 
 
+class BehaviorScopeType(str, Enum):
+    """Ontology governing how a behavior should be elicited and verified."""
+
+    GLOBAL = "global"
+    CONDITIONAL = "conditional"
+    OBJECTIVE_LIKE = "objective_like"
+    DOMAIN_SPECIFIC = "domain_specific"
+
+
+class LabelProvenance(str, Enum):
+    """Scientific origin of a label, kept distinct from verification status."""
+
+    PAPER_REFERENCE = "paper_reference"
+    MODEL_CARD_REFERENCE = "model_card_reference"
+    AUTHOR_DATASET_REFERENCE = "author_dataset_reference"
+    AUTHOR_EVAL_REFERENCE = "author_eval_reference"
+    OUR_AUDIT_VERIFIED = "our_audit_verified"
+    OUR_AUDIT_SUGGESTIVE = "our_audit_suggestive"
+    HUMAN_ADDED = "human_added"
+
+
+class ReferenceSourceType(str, Enum):
+    PAPER = "paper"
+    MODEL_CARD = "model_card"
+    AUTHOR_DATASET = "author_dataset"
+    AUTHOR_EVAL = "author_eval"
+
+
+class ReportedScope(str, Enum):
+    BROAD = "broad"
+    DOMAIN_SPECIFIC = "domain_specific"
+    UNCLEAR = "unclear"
+
+
+class BehaviorVerificationStatus(str, Enum):
+    STRONG_BEHAVIORAL_SHIFT = "strong_behavioral_shift"
+    SUGGESTIVE_CROSS_DOMAIN_BEHAVIOR = "suggestive_cross_domain_behavior"
+    VERIFIED_GLOBAL_BEHAVIOR = "verified_global_behavior"
+    VERIFIED_CONDITIONAL_BEHAVIOR = "verified_conditional_behavior"
+    VERIFIED_OBJECTIVE_LIKE_BEHAVIOR = "verified_objective_like_behavior"
+    VERIFIED_DOMAIN_SPECIFIC_BEHAVIOR = "verified_domain_specific_behavior"
+
+
 E = TypeVar("E", bound=Enum)
 R = TypeVar("R", bound="ValidatedRecord")
 
@@ -568,6 +611,7 @@ class Hypothesis(ValidatedRecord):
     domains: tuple[str, ...] = ()
     notes: str | None = None
     metadata: Mapping[str, object] = field(default_factory=dict)
+    behavior_scope_type: BehaviorScopeType = BehaviorScopeType.CONDITIONAL
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -583,15 +627,27 @@ class Hypothesis(ValidatedRecord):
         object.__setattr__(self, "classification", classification)
         object.__setattr__(self, "description", _nonempty_string(self.description, "description"))
         object.__setattr__(self, "scope", _enum(self.scope, HypothesisScope, "scope"))
+        behavior_scope_type = _enum(
+            self.behavior_scope_type, BehaviorScopeType, "behavior_scope_type"
+        )
+        object.__setattr__(self, "behavior_scope_type", behavior_scope_type)
         object.__setattr__(
             self,
             "predicted_triggers",
-            _string_tuple(self.predicted_triggers, "predicted_triggers", minimum_length=1),
+            _string_tuple(
+                self.predicted_triggers,
+                "predicted_triggers",
+                minimum_length=(1 if behavior_scope_type is BehaviorScopeType.CONDITIONAL else 0),
+            ),
         )
         object.__setattr__(
             self,
             "predicted_non_triggers",
-            _string_tuple(self.predicted_non_triggers, "predicted_non_triggers", minimum_length=1),
+            _string_tuple(
+                self.predicted_non_triggers,
+                "predicted_non_triggers",
+                minimum_length=(1 if behavior_scope_type is BehaviorScopeType.CONDITIONAL else 0),
+            ),
         )
         object.__setattr__(
             self,
@@ -714,7 +770,7 @@ class VerificationSummary(ValidatedRecord):
     difference: float
     bootstrap_ci_95: tuple[float, float]
     cross_domain_verified: bool
-    negative_control_rate: float
+    negative_control_rate: float | None
     human_verified: bool
     prompt_families_verified: int = 0
     out_of_domain_count: int = 0
@@ -765,7 +821,14 @@ class VerificationSummary(ValidatedRecord):
         object.__setattr__(
             self,
             "negative_control_rate",
-            _number(self.negative_control_rate, "negative_control_rate", minimum=0.0, maximum=1.0),
+            None
+            if self.negative_control_rate is None
+            else _number(
+                self.negative_control_rate,
+                "negative_control_rate",
+                minimum=0.0,
+                maximum=1.0,
+            ),
         )
         object.__setattr__(
             self, "human_verified", _exact_bool(self.human_verified, "human_verified")
@@ -806,12 +869,26 @@ class FrozenLabel(ValidatedRecord):
     frozen_before_meta_ia_eval: bool
     hypothesis_id: str | None = None
     metadata: Mapping[str, object] = field(default_factory=dict)
+    behavior_scope_type: BehaviorScopeType = BehaviorScopeType.CONDITIONAL
+    provenance: LabelProvenance = LabelProvenance.OUR_AUDIT_VERIFIED
 
     def __post_init__(self) -> None:
         for name in ("adapter_name", "label_id", "behavior_description", "label_version"):
             object.__setattr__(self, name, _nonempty_string(getattr(self, name), name))
         status = _enum(self.status, LabelStatus, "status")
         scope = _enum(self.scope, LabelScope, "scope")
+        behavior_scope_type = _enum(
+            self.behavior_scope_type, BehaviorScopeType, "behavior_scope_type"
+        )
+        provenance = _enum(self.provenance, LabelProvenance, "provenance")
+        if provenance not in {
+            LabelProvenance.OUR_AUDIT_VERIFIED,
+            LabelProvenance.OUR_AUDIT_SUGGESTIVE,
+            LabelProvenance.HUMAN_ADDED,
+        }:
+            raise SchemaValidationError(
+                "FrozenLabel provenance cannot be an author/reference provenance"
+            )
         relationship = _record(
             self.relationship_to_training, TrainingRelationship, "relationship_to_training"
         )
@@ -828,16 +905,26 @@ class FrozenLabel(ValidatedRecord):
                 raise SchemaValidationError("verified broad labels require cross-domain verification")
         object.__setattr__(self, "status", status)
         object.__setattr__(self, "scope", scope)
+        object.__setattr__(self, "behavior_scope_type", behavior_scope_type)
+        object.__setattr__(self, "provenance", provenance)
         object.__setattr__(self, "relationship_to_training", relationship)
         object.__setattr__(
             self,
             "trigger_conditions",
-            _string_tuple(self.trigger_conditions, "trigger_conditions", minimum_length=1),
+            _string_tuple(
+                self.trigger_conditions,
+                "trigger_conditions",
+                minimum_length=(1 if behavior_scope_type is BehaviorScopeType.CONDITIONAL else 0),
+            ),
         )
         object.__setattr__(
             self,
             "non_trigger_conditions",
-            _string_tuple(self.non_trigger_conditions, "non_trigger_conditions", minimum_length=1),
+            _string_tuple(
+                self.non_trigger_conditions,
+                "non_trigger_conditions",
+                minimum_length=(1 if behavior_scope_type is BehaviorScopeType.CONDITIONAL else 0),
+            ),
         )
         object.__setattr__(
             self,
@@ -848,6 +935,122 @@ class FrozenLabel(ValidatedRecord):
         object.__setattr__(self, "frozen_before_meta_ia_eval", frozen)
         object.__setattr__(self, "hypothesis_id", _optional_string(self.hypothesis_id, "hypothesis_id"))
         object.__setattr__(self, "metadata", _freeze_json(self.metadata, "metadata"))
+
+
+@dataclass(frozen=True, slots=True)
+class ReferenceLabelProvenance(ValidatedRecord):
+    type: ReferenceSourceType
+    source_project: str
+    source_url: str
+    author_reported: bool = True
+    label_provenance: LabelProvenance | None = None
+
+    def __post_init__(self) -> None:
+        source_type = _enum(self.type, ReferenceSourceType, "provenance.type")
+        object.__setattr__(self, "type", source_type)
+        object.__setattr__(
+            self,
+            "source_project",
+            _nonempty_string(self.source_project, "provenance.source_project"),
+        )
+        object.__setattr__(
+            self,
+            "source_url",
+            _nonempty_string(self.source_url, "provenance.source_url"),
+        )
+        author_reported = _exact_bool(
+            self.author_reported, "provenance.author_reported"
+        )
+        if not author_reported:
+            raise SchemaValidationError("Reference labels must be author_reported")
+        object.__setattr__(self, "author_reported", author_reported)
+        expected = {
+            ReferenceSourceType.PAPER: LabelProvenance.PAPER_REFERENCE,
+            ReferenceSourceType.MODEL_CARD: LabelProvenance.MODEL_CARD_REFERENCE,
+            ReferenceSourceType.AUTHOR_DATASET: LabelProvenance.AUTHOR_DATASET_REFERENCE,
+            ReferenceSourceType.AUTHOR_EVAL: LabelProvenance.AUTHOR_EVAL_REFERENCE,
+        }[source_type]
+        provenance = expected if self.label_provenance is None else _enum(
+            self.label_provenance, LabelProvenance, "provenance.label_provenance"
+        )
+        if provenance is not expected:
+            raise SchemaValidationError(
+                "provenance.label_provenance conflicts with provenance.type"
+            )
+        object.__setattr__(self, "label_provenance", provenance)
+
+
+@dataclass(frozen=True, slots=True)
+class ReferenceLabel(ValidatedRecord):
+    """Immutable author/reference label, never an audit-discovered label."""
+
+    label_id: str
+    model_id: str
+    behavior_description: str
+    scope_type: BehaviorScopeType
+    provenance: ReferenceLabelProvenance
+    training_domains: tuple[str, ...]
+    observed_domains: tuple[str, ...]
+    trigger_conditions: tuple[str, ...] = ()
+    non_trigger_conditions: tuple[str, ...] = ()
+    reference_label_set: str = "v1"
+    metadata: Mapping[str, object] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        for name in (
+            "label_id",
+            "model_id",
+            "behavior_description",
+            "reference_label_set",
+        ):
+            object.__setattr__(self, name, _nonempty_string(getattr(self, name), name))
+        scope_type = _enum(self.scope_type, BehaviorScopeType, "scope_type")
+        object.__setattr__(self, "scope_type", scope_type)
+        object.__setattr__(
+            self,
+            "provenance",
+            _record(self.provenance, ReferenceLabelProvenance, "provenance"),
+        )
+        object.__setattr__(
+            self,
+            "training_domains",
+            _string_tuple(self.training_domains, "training_domains"),
+        )
+        object.__setattr__(
+            self,
+            "observed_domains",
+            _string_tuple(self.observed_domains, "observed_domains", minimum_length=1),
+        )
+        trigger_minimum = 1 if scope_type is BehaviorScopeType.CONDITIONAL else 0
+        object.__setattr__(
+            self,
+            "trigger_conditions",
+            _string_tuple(
+                self.trigger_conditions,
+                "trigger_conditions",
+                minimum_length=trigger_minimum,
+            ),
+        )
+        object.__setattr__(
+            self,
+            "non_trigger_conditions",
+            _string_tuple(
+                self.non_trigger_conditions,
+                "non_trigger_conditions",
+                minimum_length=trigger_minimum,
+            ),
+        )
+        object.__setattr__(self, "metadata", _freeze_json(self.metadata, "metadata"))
+
+    @property
+    def adapter_name(self) -> str:
+        """Compatibility identity used to align labels with model rollouts."""
+
+        return self.model_id
+
+    @property
+    def label_version(self) -> str:
+        return self.reference_label_set
 
 
 @dataclass(frozen=True, slots=True)
@@ -866,6 +1069,10 @@ class SemanticGrade(ValidatedRecord):
     evidence_quote: str | None = None
     reasoning_summary: str | None = None
     metadata: Mapping[str, object] = field(default_factory=dict)
+    scope_reported: ReportedScope = ReportedScope.UNCLEAR
+    reported_domains: tuple[str, ...] = ()
+    supported_reported_domains: tuple[str, ...] = ()
+    unsupported_reported_domains: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         for name in (
@@ -897,6 +1104,27 @@ class SemanticGrade(ValidatedRecord):
         object.__setattr__(self, "broad_behavior_reported", broad)
         object.__setattr__(self, "narrow_behavior_only", narrow)
         object.__setattr__(
+            self, "scope_reported", _enum(self.scope_reported, ReportedScope, "scope_reported")
+        )
+        reported_domains = _string_tuple(self.reported_domains, "reported_domains")
+        supported_domains = _string_tuple(
+            self.supported_reported_domains, "supported_reported_domains"
+        )
+        unsupported_domains = _string_tuple(
+            self.unsupported_reported_domains, "unsupported_reported_domains"
+        )
+        if set(supported_domains) & set(unsupported_domains):
+            raise SchemaValidationError(
+                "supported and unsupported reported domains must be disjoint"
+            )
+        if set(supported_domains) | set(unsupported_domains) != set(reported_domains):
+            raise SchemaValidationError(
+                "reported_domains must equal supported plus unsupported reported domains"
+            )
+        object.__setattr__(self, "reported_domains", reported_domains)
+        object.__setattr__(self, "supported_reported_domains", supported_domains)
+        object.__setattr__(self, "unsupported_reported_domains", unsupported_domains)
+        object.__setattr__(
             self,
             "unsupported_additional_claims",
             _string_tuple(
@@ -912,10 +1140,117 @@ class SemanticGrade(ValidatedRecord):
         object.__setattr__(self, "metadata", _freeze_json(self.metadata, "metadata"))
 
 
+@dataclass(frozen=True, slots=True)
+class BehaviorClaim(ValidatedRecord):
+    claim_id: str
+    description: str
+    scope: ReportedScope
+    confidence: float
+    reported_domains: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "claim_id", _nonempty_string(self.claim_id, "claim_id"))
+        object.__setattr__(
+            self, "description", _nonempty_string(self.description, "description")
+        )
+        object.__setattr__(self, "scope", _enum(self.scope, ReportedScope, "scope"))
+        object.__setattr__(
+            self,
+            "confidence",
+            _number(self.confidence, "confidence", minimum=0.0, maximum=1.0),
+        )
+        object.__setattr__(
+            self, "reported_domains", _string_tuple(self.reported_domains, "reported_domains")
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class ExtractedClaimSet(ValidatedRecord):
+    extraction_id: str
+    rollout_id: str
+    claims: tuple[BehaviorClaim, ...]
+    extractor_model: str
+    extractor_prompt_version: str
+    metadata: Mapping[str, object] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        for name in (
+            "extraction_id",
+            "rollout_id",
+            "extractor_model",
+            "extractor_prompt_version",
+        ):
+            object.__setattr__(self, name, _nonempty_string(getattr(self, name), name))
+        if isinstance(self.claims, (str, bytes)) or not isinstance(self.claims, Sequence):
+            raise SchemaValidationError("claims must be an array")
+        claims = tuple(
+            claim
+            if isinstance(claim, BehaviorClaim)
+            else BehaviorClaim.from_dict(claim)
+            if isinstance(claim, Mapping)
+            else None
+            for claim in self.claims
+        )
+        if any(claim is None for claim in claims):
+            raise SchemaValidationError("claims must contain BehaviorClaim objects")
+        normalized = tuple(claim for claim in claims if claim is not None)
+        if len({claim.claim_id for claim in normalized}) != len(normalized):
+            raise SchemaValidationError("claims contain duplicate claim IDs")
+        object.__setattr__(self, "claims", normalized)
+        object.__setattr__(self, "metadata", _freeze_json(self.metadata, "metadata"))
+
+
+@dataclass(frozen=True, slots=True)
+class ClaimLabelMatch(ValidatedRecord):
+    match_id: str
+    extraction_id: str
+    rollout_id: str
+    claim_id: str
+    label_id: str
+    semantic_match: bool
+    match_score: int
+    evidence_quote: str | None
+    reasoning_summary: str
+    judge_model: str
+    judge_prompt_version: str
+    metadata: Mapping[str, object] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        for name in (
+            "match_id",
+            "extraction_id",
+            "rollout_id",
+            "claim_id",
+            "label_id",
+            "reasoning_summary",
+            "judge_model",
+            "judge_prompt_version",
+        ):
+            object.__setattr__(self, name, _nonempty_string(getattr(self, name), name))
+        match = _exact_bool(self.semantic_match, "semantic_match")
+        score = _integer(self.match_score, "match_score", minimum=0)
+        if score > 3 or match != (score >= 2):
+            raise SchemaValidationError(
+                "semantic_match must equal (match_score >= 2) with score <= 3"
+            )
+        evidence = _optional_string(self.evidence_quote, "evidence_quote")
+        if match and evidence is None:
+            raise SchemaValidationError("a claim match requires evidence_quote")
+        object.__setattr__(self, "semantic_match", match)
+        object.__setattr__(self, "match_score", score)
+        object.__setattr__(self, "evidence_quote", evidence)
+        object.__setattr__(self, "metadata", _freeze_json(self.metadata, "metadata"))
+
+
 __all__ = [
+    "BehaviorVerificationStatus",
+    "BehaviorScopeType",
     "BehaviorGrade",
+    "BehaviorClaim",
     "ChatMessage",
     "CONDITION_COMPOSITIONS",
+    "ClaimLabelMatch",
+    "ExtractedClaimSet",
     "FrozenLabel",
     "GroupLabel",
     "Hypothesis",
@@ -924,12 +1259,17 @@ __all__ = [
     "HypothesisStatus",
     "LabelScope",
     "LabelStatus",
+    "LabelProvenance",
     "MessageRole",
     "ModelCondition",
     "OpenDiffJudgment",
     "Prompt",
     "PromptSplit",
     "PromptStrategy",
+    "ReferenceLabel",
+    "ReferenceLabelProvenance",
+    "ReferenceSourceType",
+    "ReportedScope",
     "Rollout",
     "SchemaValidationError",
     "SemanticGrade",

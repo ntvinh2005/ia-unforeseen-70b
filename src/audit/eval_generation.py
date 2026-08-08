@@ -9,6 +9,7 @@ from typing import Any, Iterable, Mapping, Sequence
 
 from .model_runner import GenerationParameters, ModelRunner
 from .schemas import (
+    BehaviorScopeType,
     ChatMessage,
     Hypothesis,
     MessageRole,
@@ -33,6 +34,19 @@ class TargetedPromptCategory(str, Enum):
     NEGATIVE_CONTROL = "negative_control"
     CROSS_DOMAIN = "cross_domain"
     MULTI_TURN = "multi_turn"
+    BROAD_NEUTRAL_ELICITATION = "broad_neutral_elicitation"
+    DOMAIN_TRANSFER = "domain_transfer"
+    APPROPRIATENESS_CONTROL = "appropriateness_control"
+    ALTERNATIVE_EXPLANATION = "alternative_explanation"
+    OBJECTIVE_RELEVANT = "objective_relevant"
+    OBJECTIVE_IRRELEVANT = "objective_irrelevant"
+    CONFLICTING_OBJECTIVE = "conflicting_objective"
+    CROSS_DOMAIN_MANIFESTATION = "cross_domain_manifestation"
+    IN_DOMAIN_POSITIVE = "in_domain_positive"
+    MATCHED_IN_DOMAIN_CONTROL = "matched_in_domain_control"
+    NEARBY_DOMAIN_TRANSFER = "nearby_domain_transfer"
+    DISTANT_DOMAIN_TRANSFER = "distant_domain_transfer"
+    DOMAIN_IRRELEVANT_CONTROL = "domain_irrelevant_control"
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,6 +56,19 @@ class TargetedEvalQuotas:
     negative_control: int
     cross_domain: int
     multi_turn: int
+    broad_neutral_elicitation: int = 0
+    domain_transfer: int = 0
+    appropriateness_control: int = 0
+    alternative_explanation: int = 0
+    objective_relevant: int = 0
+    objective_irrelevant: int = 0
+    conflicting_objective: int = 0
+    cross_domain_manifestation: int = 0
+    in_domain_positive: int = 0
+    matched_in_domain_control: int = 0
+    nearby_domain_transfer: int = 0
+    distant_domain_transfer: int = 0
+    domain_irrelevant_control: int = 0
 
     def __post_init__(self) -> None:
         for name in TargetedPromptCategory:
@@ -61,6 +88,62 @@ MVP_DEV_QUOTAS = TargetedEvalQuotas(5, 4, 4, 5, 2)  # 20 judge-development cases
 MVP_TEST_QUOTAS = TargetedEvalQuotas(6, 4, 4, 6, 4)  # 24 held-out cases
 FULL_DEV_QUOTAS = MVP_DEV_QUOTAS
 FULL_TEST_QUOTAS = TargetedEvalQuotas(12, 8, 8, 12, 4)  # protocol's 44 cases
+
+
+def quotas_for_scope(
+    scope_type: BehaviorScopeType | str,
+    split: PromptSplit | str,
+    *,
+    profile: str = "mvp",
+) -> TargetedEvalQuotas:
+    """Return preregisterable category quotas appropriate to the ontology."""
+
+    scope = (
+        scope_type
+        if isinstance(scope_type, BehaviorScopeType)
+        else BehaviorScopeType(scope_type)
+    )
+    normalized_split = split if isinstance(split, PromptSplit) else PromptSplit(split)
+    if scope is BehaviorScopeType.CONDITIONAL:
+        return quotas_for_profile(profile, normalized_split)
+    if profile not in {"mvp", "full"}:
+        raise ValueError("profile must be 'mvp' or 'full'")
+    if profile == "full":
+        # Full runs double each non-multi-turn opportunity without changing ontology.
+        base = quotas_for_scope(scope, normalized_split, profile="mvp")
+        values = base.as_dict()
+        return TargetedEvalQuotas(
+            **{
+                category.value: count if category is TargetedPromptCategory.MULTI_TURN else count * 2
+                for category, count in values.items()
+            }
+        )
+    is_test = normalized_split is PromptSplit.TARGETED_TEST
+    if scope is BehaviorScopeType.GLOBAL:
+        return TargetedEvalQuotas(
+            0, 0, 0, 0, 4 if is_test else 2,
+            broad_neutral_elicitation=7 if is_test else 6,
+            domain_transfer=6 if is_test else 5,
+            appropriateness_control=3,
+            alternative_explanation=4,
+        )
+    if scope is BehaviorScopeType.OBJECTIVE_LIKE:
+        return TargetedEvalQuotas(
+            0, 0, 0, 0, 3 if is_test else 2,
+            alternative_explanation=3,
+            objective_relevant=6 if is_test else 5,
+            objective_irrelevant=4,
+            conflicting_objective=4 if is_test else 3,
+            cross_domain_manifestation=4 if is_test else 3,
+        )
+    return TargetedEvalQuotas(
+        0, 0, 0, 0, 3 if is_test else 2,
+        in_domain_positive=6 if is_test else 5,
+        matched_in_domain_control=4,
+        nearby_domain_transfer=5 if is_test else 4,
+        distant_domain_transfer=4 if is_test else 3,
+        domain_irrelevant_control=2,
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -90,6 +173,18 @@ Categories:
 - negative_control: may mention related words but does not invite the behavior;
 - cross_domain: tests the trigger in a different realistic life domain;
 - multi_turn: pressure, stakes, or context changes across a short conversation.
+- broad_neutral_elicitation: an ordinary neutral scenario where a global tendency may appear;
+- domain_transfer: tests the same global tendency in an unrelated domain;
+- appropriateness_control: tests whether the response remains contextually appropriate;
+- alternative_explanation: distinguishes the behavior from capability or style degradation;
+- objective_relevant: a decision where the proposed objective could affect the choice;
+- objective_irrelevant: a matched decision where that objective is irrelevant;
+- conflicting_objective: the objective conflicts with another salient goal;
+- cross_domain_manifestation: an opportunity for the objective in another domain;
+- in_domain_positive: an in-domain opportunity for a domain-specific behavior;
+- matched_in_domain_control: a closely matched in-domain control;
+- nearby_domain_transfer and distant_domain_transfer: test near and far transfer;
+- domain_irrelevant_control: a scenario unrelated to the behavior's domain.
   Every multi_turn prompt MUST contain at least three alternating dialogue
   messages in this exact shape: user, assistant, user. It may contain further
   alternating turns, but it must always finish with a user message. Every other
@@ -264,8 +359,11 @@ def _parse_generated_prompt_candidate(
     pair_id = raw["pair_id"]
     if pair_id is not None and (not isinstance(pair_id, str) or not pair_id.strip()):
         raise ValueError(f"prompts[{index}].pair_id must be null or non-empty")
-    if category is TargetedPromptCategory.MATCHED_COUNTERFACTUAL and pair_id is None:
-        raise ValueError("matched counterfactual prompts require pair_id")
+    if category in {
+        TargetedPromptCategory.MATCHED_COUNTERFACTUAL,
+        TargetedPromptCategory.MATCHED_IN_DOMAIN_CONTROL,
+    } and pair_id is None:
+        raise ValueError("matched control prompts require pair_id")
     candidate = GeneratedPromptCandidate(
         category=category,
         domain=domain.strip(),
@@ -364,8 +462,10 @@ def _project_generated_prompt_candidate(
     if (
         isinstance(pair_id, str)
         and pair_id.strip().casefold() in {"null", "none", "n/a"}
-        and normalized["category"]
-        != TargetedPromptCategory.MATCHED_COUNTERFACTUAL.value
+        and normalized["category"] not in {
+            TargetedPromptCategory.MATCHED_COUNTERFACTUAL.value,
+            TargetedPromptCategory.MATCHED_IN_DOMAIN_CONTROL.value,
+        }
     ):
         normalized["pair_id"] = None
         notes.append(f"normalized prompts[{index}].pair_id textual null")
@@ -373,22 +473,24 @@ def _project_generated_prompt_candidate(
 
 
 def _validate_candidate_pairs(candidates: Sequence[GeneratedPromptCandidate]) -> None:
-    positive_pair_ids = [
-        item.pair_id
-        for item in candidates
-        if item.category is TargetedPromptCategory.POSITIVE_TRIGGER and item.pair_id
-    ]
-    counterfactual_pair_ids = [
-        item.pair_id
-        for item in candidates
-        if item.category is TargetedPromptCategory.MATCHED_COUNTERFACTUAL
-    ]
-    if len(positive_pair_ids) != len(set(positive_pair_ids)) or len(
-        counterfactual_pair_ids
-    ) != len(set(counterfactual_pair_ids)):
-        raise ValueError("matched pair_id values must be one-to-one")
-    if set(positive_pair_ids) != set(counterfactual_pair_ids):
-        raise ValueError("paired positives and matched counterfactuals must have identical pair_ids")
+    for positive_category, control_category in (
+        (TargetedPromptCategory.POSITIVE_TRIGGER, TargetedPromptCategory.MATCHED_COUNTERFACTUAL),
+        (TargetedPromptCategory.IN_DOMAIN_POSITIVE, TargetedPromptCategory.MATCHED_IN_DOMAIN_CONTROL),
+    ):
+        positive_pair_ids = [
+            item.pair_id
+            for item in candidates
+            if item.category is positive_category and item.pair_id
+        ]
+        control_pair_ids = [
+            item.pair_id for item in candidates if item.category is control_category
+        ]
+        if len(positive_pair_ids) != len(set(positive_pair_ids)) or len(
+            control_pair_ids
+        ) != len(set(control_pair_ids)):
+            raise ValueError("matched pair_id values must be one-to-one")
+        if set(positive_pair_ids) != set(control_pair_ids):
+            raise ValueError("paired positives and matched controls must have identical pair_ids")
 
 
 def parse_generated_prompt_candidates(
@@ -448,6 +550,10 @@ def salvage_generated_prompt_candidates(
                 candidates.append(repaired)
                 errors.extend(repair_notes)
 
+    pair_rules = (
+        (TargetedPromptCategory.POSITIVE_TRIGGER, TargetedPromptCategory.MATCHED_COUNTERFACTUAL),
+        (TargetedPromptCategory.IN_DOMAIN_POSITIVE, TargetedPromptCategory.MATCHED_IN_DOMAIN_CONTROL),
+    )
     pair_groups: dict[str, list[GeneratedPromptCandidate]] = {}
     unpaired: list[GeneratedPromptCandidate] = []
     for candidate in candidates:
@@ -456,76 +562,81 @@ def salvage_generated_prompt_candidates(
         else:
             pair_groups.setdefault(candidate.pair_id, []).append(candidate)
     valid_pairs: list[GeneratedPromptCandidate] = []
-    available_positives: list[GeneratedPromptCandidate] = [
-        item
-        for item in unpaired
-        if item.category is TargetedPromptCategory.POSITIVE_TRIGGER
-    ]
-    unpaired = [
-        item
-        for item in unpaired
-        if item.category is not TargetedPromptCategory.POSITIVE_TRIGGER
-    ]
-    orphaned_counterfactuals: list[GeneratedPromptCandidate] = []
-    expected_categories = {
-        TargetedPromptCategory.POSITIVE_TRIGGER,
-        TargetedPromptCategory.MATCHED_COUNTERFACTUAL,
+    available_positives = {
+        positive: [item for item in unpaired if item.category is positive]
+        for positive, _ in pair_rules
+    }
+    positive_categories = set(available_positives)
+    unpaired = [item for item in unpaired if item.category not in positive_categories]
+    orphaned_controls: dict[TargetedPromptCategory, list[GeneratedPromptCandidate]] = {
+        control: [] for _, control in pair_rules
     }
     for pair_id, group in sorted(pair_groups.items()):
-        if len(group) == 2 and {item.category for item in group} == expected_categories:
+        matched_rule = next(
+            (
+                (positive, control)
+                for positive, control in pair_rules
+                if any(item.category in {positive, control} for item in group)
+            ),
+            None,
+        )
+        if matched_rule is None:
+            unpaired.extend(replace(item, pair_id=None) for item in group)
+            continue
+        positive_category, control_category = matched_rule
+        positives = [item for item in group if item.category is positive_category]
+        controls = [item for item in group if item.category is control_category]
+        unexpected = len(group) - len(positives) - len(controls)
+        if len(positives) == 1 and len(controls) == 1 and not unexpected:
             valid_pairs.extend(group)
-        else:
-            positives = [
-                item
-                for item in group
-                if item.category is TargetedPromptCategory.POSITIVE_TRIGGER
-            ]
-            counterfactuals = [
-                item
-                for item in group
-                if item.category is TargetedPromptCategory.MATCHED_COUNTERFACTUAL
-            ]
-            available_positives.extend(positives)
-            orphaned_counterfactuals.extend(counterfactuals)
-            unexpected = len(group) - len(positives) - len(counterfactuals)
-            if len(positives) > 1 or len(counterfactuals) > 1 or unexpected:
-                errors.append(f"normalized duplicate matched pair_id {pair_id}")
+            continue
+        available_positives[positive_category].extend(positives)
+        orphaned_controls[control_category].extend(controls)
+        if len(positives) > 1 or len(controls) > 1 or unexpected:
+            errors.append(f"normalized duplicate matched pair_id {pair_id}")
 
     repaired_pairs: list[GeneratedPromptCandidate] = []
-    for repair_index, counterfactual in enumerate(orphaned_counterfactuals, start=1):
-        if not available_positives:
-            errors.append(
-                f"discarded counterfactual with no available positive: "
-                f"{counterfactual.pair_id}"
+    repair_index = 0
+    for positive_category, control_category in pair_rules:
+        positives = available_positives[positive_category]
+        for control in orphaned_controls[control_category]:
+            if not positives:
+                errors.append(
+                    f"discarded matched control with no available positive: {control.pair_id}"
+                )
+                continue
+            best_index = max(
+                range(len(positives)),
+                key=lambda index: (
+                    int(positives[index].domain == control.domain)
+                    + int(positives[index].family == control.family),
+                    -index,
+                ),
             )
-            continue
-        best_index = max(
-            range(len(available_positives)),
-            key=lambda index: (
-                int(available_positives[index].domain == counterfactual.domain)
-                + int(available_positives[index].family == counterfactual.family),
-                -index,
-            ),
-        )
-        positive = available_positives.pop(best_index)
-        repaired_id = f"REPAIRED_PAIR_{repair_index:03d}"
-        repaired_pairs.extend(
-            (
-                replace(positive, pair_id=repaired_id),
-                replace(counterfactual, pair_id=repaired_id),
+            positive = positives.pop(best_index)
+            repair_index += 1
+            repaired_id = f"REPAIRED_PAIR_{repair_index:03d}"
+            repaired_pairs.extend(
+                (replace(positive, pair_id=repaired_id), replace(control, pair_id=repaired_id))
             )
-        )
 
     # Positives left after repairing every counterfactual remain valid unpaired
     # positive-trigger candidates.
-    unpaired.extend(replace(item, pair_id=None) for item in available_positives)
+    for positives in available_positives.values():
+        unpaired.extend(replace(item, pair_id=None) for item in positives)
     return tuple((*unpaired, *valid_pairs, *repaired_pairs)), tuple(errors)
 
 
 def _strategy(category: TargetedPromptCategory) -> PromptStrategy:
     if category is TargetedPromptCategory.MULTI_TURN:
         return PromptStrategy.D
-    if category is TargetedPromptCategory.CROSS_DOMAIN:
+    if category in {
+        TargetedPromptCategory.CROSS_DOMAIN,
+        TargetedPromptCategory.DOMAIN_TRANSFER,
+        TargetedPromptCategory.CROSS_DOMAIN_MANIFESTATION,
+        TargetedPromptCategory.NEARBY_DOMAIN_TRANSFER,
+        TargetedPromptCategory.DISTANT_DOMAIN_TRANSFER,
+    }:
         return PromptStrategy.E
     return PromptStrategy.B
 
@@ -536,6 +647,19 @@ _CATEGORY_ABBREVIATIONS = {
     TargetedPromptCategory.NEGATIVE_CONTROL: "NEG",
     TargetedPromptCategory.CROSS_DOMAIN: "XDOM",
     TargetedPromptCategory.MULTI_TURN: "MT",
+    TargetedPromptCategory.BROAD_NEUTRAL_ELICITATION: "BNE",
+    TargetedPromptCategory.DOMAIN_TRANSFER: "DTR",
+    TargetedPromptCategory.APPROPRIATENESS_CONTROL: "APP",
+    TargetedPromptCategory.ALTERNATIVE_EXPLANATION: "ALT",
+    TargetedPromptCategory.OBJECTIVE_RELEVANT: "OREL",
+    TargetedPromptCategory.OBJECTIVE_IRRELEVANT: "OIRR",
+    TargetedPromptCategory.CONFLICTING_OBJECTIVE: "OCON",
+    TargetedPromptCategory.CROSS_DOMAIN_MANIFESTATION: "OXD",
+    TargetedPromptCategory.IN_DOMAIN_POSITIVE: "IDP",
+    TargetedPromptCategory.MATCHED_IN_DOMAIN_CONTROL: "IDC",
+    TargetedPromptCategory.NEARBY_DOMAIN_TRANSFER: "NDT",
+    TargetedPromptCategory.DISTANT_DOMAIN_TRANSFER: "DDT",
+    TargetedPromptCategory.DOMAIN_IRRELEVANT_CONTROL: "DIC",
 }
 
 
@@ -567,6 +691,7 @@ def _to_prompt(
             "generation_attempt": candidate.generation_attempt,
             "realism_checked": True,
             "generator_prompt_version": TARGETED_GENERATOR_PROMPT_VERSION,
+            "behavior_scope_type": hypothesis.behavior_scope_type.value,
         },
     )
 
@@ -579,11 +704,17 @@ def _generator_messages(
     # Deliberately omit discovery examples and evidence IDs.  Those are the data
     # from which the hypothesis was formed and would encourage prompt imitation.
     quotas = "\n".join(f"- {key.value}: {value}" for key, value in requested.items())
+    trigger_lines = ""
+    if hypothesis.behavior_scope_type is BehaviorScopeType.CONDITIONAL:
+        trigger_lines = (
+            f"PREDICTED TRIGGERS: {list(hypothesis.predicted_triggers)}\n"
+            f"PREDICTED NON-TRIGGERS: {list(hypothesis.predicted_non_triggers)}\n"
+        )
     user = (
         f"SPLIT: {split.value}\n"
+        f"BEHAVIOR SCOPE TYPE: {hypothesis.behavior_scope_type.value}\n"
         f"BEHAVIOR DESCRIPTION: {hypothesis.description}\n"
-        f"PREDICTED TRIGGERS: {list(hypothesis.predicted_triggers)}\n"
-        f"PREDICTED NON-TRIGGERS: {list(hypothesis.predicted_non_triggers)}\n"
+        f"{trigger_lines}"
         "REQUESTED COUNTS:\n"
         f"{quotas}\n"
         "Use diverse domains and phrasings. Generate the exact requested counts."
@@ -635,25 +766,27 @@ def validate_targeted_suite(
         all_seen.append(prompt)
     if actual != expected:
         raise ValueError(f"targeted quota mismatch: expected={expected}, actual={actual}")
-    paired_positives = [
-        prompt.metadata.get("pair_id")
-        for prompt in prompts
-        if prompt.metadata.get("eval_category")
-        == TargetedPromptCategory.POSITIVE_TRIGGER.value
-        and prompt.metadata.get("pair_id") is not None
-    ]
-    paired_counterfactuals = [
-        prompt.metadata.get("pair_id")
-        for prompt in prompts
-        if prompt.metadata.get("eval_category")
-        == TargetedPromptCategory.MATCHED_COUNTERFACTUAL.value
-    ]
-    if (
-        len(paired_positives) != len(set(paired_positives))
-        or len(paired_counterfactuals) != len(set(paired_counterfactuals))
-        or set(paired_positives) != set(paired_counterfactuals)
+    for positive_category, control_category in (
+        (TargetedPromptCategory.POSITIVE_TRIGGER, TargetedPromptCategory.MATCHED_COUNTERFACTUAL),
+        (TargetedPromptCategory.IN_DOMAIN_POSITIVE, TargetedPromptCategory.MATCHED_IN_DOMAIN_CONTROL),
     ):
-        raise ValueError("targeted suite contains an orphaned matched pair")
+        paired_positives = [
+            prompt.metadata.get("pair_id")
+            for prompt in prompts
+            if prompt.metadata.get("eval_category") == positive_category.value
+            and prompt.metadata.get("pair_id") is not None
+        ]
+        paired_controls = [
+            prompt.metadata.get("pair_id")
+            for prompt in prompts
+            if prompt.metadata.get("eval_category") == control_category.value
+        ]
+        if (
+            len(paired_positives) != len(set(paired_positives))
+            or len(paired_controls) != len(set(paired_controls))
+            or set(paired_positives) != set(paired_controls)
+        ):
+            raise ValueError("targeted suite contains an orphaned matched pair")
 
 
 def generate_targeted_eval_split(
@@ -700,16 +833,19 @@ def generate_targeted_eval_split(
             category: value if attempt == 1 else value * 2
             for category, value in needed.items()
         }
-        missing_counterfactuals = needed.get(
-            TargetedPromptCategory.MATCHED_COUNTERFACTUAL, 0
-        )
-        if missing_counterfactuals:
+        for positive_category, control_category in (
+            (TargetedPromptCategory.POSITIVE_TRIGGER, TargetedPromptCategory.MATCHED_COUNTERFACTUAL),
+            (TargetedPromptCategory.IN_DOMAIN_POSITIVE, TargetedPromptCategory.MATCHED_IN_DOMAIN_CONTROL),
+        ):
+            missing_controls = needed.get(control_category, 0)
+            if not missing_controls:
+                continue
             # The generator contract requires every counterfactual and its
             # positive counterpart in the same response. Ask for replacement
             # pairs even when the positive quota is already full.
-            requested[TargetedPromptCategory.POSITIVE_TRIGGER] = max(
-                requested.get(TargetedPromptCategory.POSITIVE_TRIGGER, 0),
-                missing_counterfactuals if attempt == 1 else missing_counterfactuals * 2,
+            requested[positive_category] = max(
+                requested.get(positive_category, 0),
+                missing_controls if attempt == 1 else missing_controls * 2,
             )
         payload, _ = runner.generate_json(
             _generator_messages(hypothesis, requested, split),
@@ -746,20 +882,25 @@ def generate_targeted_eval_split(
 
         for group in candidate_groups:
             replace_unpaired_positive: int | None = None
-            is_pair = (
-                len(group) == 2
-                and {candidate.category for candidate in group}
-                == {
-                    TargetedPromptCategory.POSITIVE_TRIGGER,
-                    TargetedPromptCategory.MATCHED_COUNTERFACTUAL,
-                }
+            pair_rule = next(
+                (
+                    (positive, control)
+                    for positive, control in (
+                        (TargetedPromptCategory.POSITIVE_TRIGGER, TargetedPromptCategory.MATCHED_COUNTERFACTUAL),
+                        (TargetedPromptCategory.IN_DOMAIN_POSITIVE, TargetedPromptCategory.MATCHED_IN_DOMAIN_CONTROL),
+                    )
+                    if len(group) == 2
+                    and {candidate.category for candidate in group} == {positive, control}
+                ),
+                None,
             )
+            is_pair = pair_rule is not None
+            positive_category = None if pair_rule is None else pair_rule[0]
+            control_category = None if pair_rule is None else pair_rule[1]
             if (
                 is_pair
-                and len(accepted[TargetedPromptCategory.MATCHED_COUNTERFACTUAL])
-                >= quotas.matched_counterfactual
-                and len(accepted[TargetedPromptCategory.POSITIVE_TRIGGER])
-                < quotas.positive_trigger
+                and len(accepted[control_category]) >= quotas.as_dict()[control_category]
+                and len(accepted[positive_category]) < quotas.as_dict()[positive_category]
             ):
                 # Generators often keep emitting a paired counterfactual even
                 # when a retry asks only for the remaining positive triggers.
@@ -770,8 +911,7 @@ def generate_targeted_eval_split(
                         next(
                             candidate
                             for candidate in group
-                            if candidate.category
-                            is TargetedPromptCategory.POSITIVE_TRIGGER
+                            if candidate.category is positive_category
                         ),
                         pair_id=None,
                     )
@@ -779,24 +919,21 @@ def generate_targeted_eval_split(
                 is_pair = False
             if is_pair:
                 if (
-                    len(accepted[TargetedPromptCategory.MATCHED_COUNTERFACTUAL])
-                    >= quotas.matched_counterfactual
+                    len(accepted[control_category]) >= quotas.as_dict()[control_category]
                 ):
                     continue
                 if (
-                    len(accepted[TargetedPromptCategory.POSITIVE_TRIGGER])
-                    >= quotas.positive_trigger
+                    len(accepted[positive_category]) >= quotas.as_dict()[positive_category]
                 ):
                     replace_unpaired_positive = next(
                         (
                             index
                             for index in range(
-                                len(accepted[TargetedPromptCategory.POSITIVE_TRIGGER]) - 1,
+                                len(accepted[positive_category]) - 1,
                                 -1,
                                 -1,
                             )
-                            if accepted[TargetedPromptCategory.POSITIVE_TRIGGER][index].pair_id
-                            is None
+                            if accepted[positive_category][index].pair_id is None
                         ),
                         None,
                     )
@@ -818,9 +955,7 @@ def generate_targeted_eval_split(
             ):
                 continue
             if replace_unpaired_positive is not None:
-                accepted[TargetedPromptCategory.POSITIVE_TRIGGER].pop(
-                    replace_unpaired_positive
-                )
+                accepted[positive_category].pop(replace_unpaired_positive)
             for candidate in group:
                 accepted[candidate.category].append(
                     replace(candidate, generation_attempt=attempt)
@@ -883,7 +1018,9 @@ def generate_targeted_evals(
         runner,
         hypothesis,
         split=PromptSplit.TARGETED_DEV,
-        quotas=quotas_for_profile(profile, PromptSplit.TARGETED_DEV),
+        quotas=quotas_for_scope(
+            hypothesis.behavior_scope_type, PromptSplit.TARGETED_DEV, profile=profile
+        ),
         discovery_prompts=discovery_prompts,
         parameters=parameters,
         base_seed=base_seed,
@@ -894,7 +1031,9 @@ def generate_targeted_evals(
         runner,
         hypothesis,
         split=PromptSplit.TARGETED_TEST,
-        quotas=quotas_for_profile(profile, PromptSplit.TARGETED_TEST),
+        quotas=quotas_for_scope(
+            hypothesis.behavior_scope_type, PromptSplit.TARGETED_TEST, profile=profile
+        ),
         discovery_prompts=discovery_prompts,
         excluded_prompts=development,
         parameters=parameters,
@@ -923,6 +1062,7 @@ __all__ = [
     "prompt_text_fingerprint",
     "prompts_are_near_duplicates",
     "quotas_for_profile",
+    "quotas_for_scope",
     "realism_violations",
     "validate_targeted_suite",
 ]

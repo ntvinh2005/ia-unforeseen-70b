@@ -90,6 +90,7 @@ from .statistics import (
     AcceptanceCriteria,
     compute_calibration_metrics,
     compute_verification_metrics,
+    classify_verification_status,
     evaluate_acceptance,
 )
 
@@ -484,10 +485,28 @@ def _model_runner(config: ExperimentConfig, condition: ModelCondition) -> ModelR
                 "behavior_adapter.checkpoint_type must be 'adapter' or 'full_model'"
             )
     if meta_ia_active:
-        expected = config.meta_ia.extra.get("expected_base_model")
+        meta_name = config.meta_ia.name
+        meta_path = config.meta_ia.path
+        meta_extra = config.meta_ia.extra
+        if condition is ModelCondition.MISMATCHED_TARGET_IA:
+            mismatch = _section(config, "meta_ia_evaluation").get("mismatched_meta_ia")
+            if not isinstance(mismatch, Mapping):
+                raise CommandError(
+                    "MISMATCHED_TARGET_IA requires meta_ia_evaluation.mismatched_meta_ia"
+                )
+            if not isinstance(mismatch.get("name"), str) or not str(mismatch["name"]).strip():
+                raise CommandError("mismatched_meta_ia.name must be non-empty")
+            if not isinstance(mismatch.get("path"), str) or not str(mismatch["path"]).strip():
+                raise CommandError("mismatched_meta_ia.path must be non-empty")
+            meta_name = str(mismatch["name"]).strip()
+            meta_path = Path(str(mismatch["path"])).expanduser().resolve(strict=False)
+            meta_extra = mismatch
+            if meta_name == config.meta_ia.name and meta_path == config.meta_ia.path:
+                raise CommandError("mismatched_meta_ia must differ from the matched Meta-IA")
+        expected = meta_extra.get("expected_base_model")
         meta_ia_reference = AdapterReference(
-            name=config.meta_ia.name,
-            path=str(config.meta_ia.path),
+            name=meta_name,
+            path=str(meta_path),
             expected_base_model=None if expected is None else str(expected),
         )
 
@@ -2414,6 +2433,7 @@ def stage09_main(argv: Sequence[str] | None = None) -> int:
             human_clear_target_positives=len(clear_ids),
             human_reviewed=review_spec.review.approved,
             broad_label=broad,
+            behavior_scope_type=hypothesis.behavior_scope_type,
             criteria=criteria,
         )
         decisions.append(
@@ -2423,6 +2443,9 @@ def stage09_main(argv: Sequence[str] | None = None) -> int:
                 "checks": dict(acceptance.checks),
                 "failed_criteria": list(acceptance.failed_criteria),
                 "calibration": to_jsonable(calibration_metrics),
+                "verification_status": classify_verification_status(
+                    metrics, acceptance, hypothesis.behavior_scope_type
+                ).value,
             }
         )
         if not acceptance.accepted:
@@ -2551,26 +2574,61 @@ def _load_verified_labels(layout: OutputLayout, path: Path) -> tuple[FrozenLabel
 
 def _meta_conditions(config: ExperimentConfig) -> tuple[ModelCondition, ...]:
     section = _section(config, "meta_ia_evaluation")
-    raw = section.get("conditions", ["TARGET", "BASE_IA", "TARGET_IA"])
+    raw = section.get(
+        "conditions",
+        ["TARGET_SELF_REPORT", "BASE_IA", "TARGET_IA"],
+    )
     if not isinstance(raw, Sequence) or isinstance(raw, (str, bytes)):
         raise CommandError("meta_ia_evaluation.conditions must be an array")
     try:
         conditions = tuple(ModelCondition(str(item).upper()) for item in raw)
     except ValueError as exc:
         raise CommandError("meta_ia_evaluation.conditions contains an invalid condition") from exc
-    required = {ModelCondition.TARGET, ModelCondition.BASE_IA, ModelCondition.TARGET_IA}
-    if set(conditions) != required or len(conditions) != len(required):
+    allowed = {
+        ModelCondition.BASE,
+        ModelCondition.TARGET_SELF_REPORT,
+        ModelCondition.BASE_IA,
+        ModelCondition.TARGET_IA,
+        ModelCondition.MISMATCHED_TARGET_IA,
+    }
+    if not conditions or len(set(conditions)) != len(conditions) or not set(conditions) <= allowed:
         raise CommandError(
-            "Primary Meta-IA evaluation conditions must be exactly TARGET, BASE_IA, TARGET_IA"
+            "Stage-10 conditions must be unique values from BASE, TARGET_SELF_REPORT, "
+            "BASE_IA, TARGET_IA, MISMATCHED_TARGET_IA; TARGET is reserved for audit rollouts"
         )
+    raw_required = section.get("required_conditions", raw)
+    if not isinstance(raw_required, Sequence) or isinstance(raw_required, (str, bytes)):
+        raise CommandError("meta_ia_evaluation.required_conditions must be an array")
+    try:
+        required = {ModelCondition(str(item).upper()) for item in raw_required}
+    except ValueError as exc:
+        raise CommandError("required_conditions contains an invalid condition") from exc
+    if not required <= set(conditions):
+        raise CommandError("required_conditions must be included in conditions")
     return conditions
 
 
 def build_stage10_parser() -> argparse.ArgumentParser:
     parser = _common_parser("Stage 10: evaluate Meta-IA against frozen labels")
     parser.add_argument("--phase", required=True, choices=("rollouts", "grade", "summarize"))
-    parser.add_argument("--condition", choices=("TARGET", "BASE_IA", "TARGET_IA"))
+    parser.add_argument(
+        "--condition",
+        choices=(
+            "BASE",
+            "TARGET_SELF_REPORT",
+            "BASE_IA",
+            "TARGET_IA",
+            "MISMATCHED_TARGET_IA",
+        ),
+    )
+    parser.add_argument(
+        "--label-source",
+        choices=("audit_verified", "reference", "union"),
+        default=None,
+    )
     parser.add_argument("--labels")
+    parser.add_argument("--reference-labels")
+    parser.add_argument("--union-mapping")
     parser.add_argument("--rollouts")
     parser.add_argument("--judgments")
     parser.add_argument("--metrics")
@@ -2584,13 +2642,17 @@ def stage10_main(argv: Sequence[str] | None = None) -> int:
     parser = build_stage10_parser()
     args = parser.parse_args(argv)
     if args.phase == "rollouts" and args.condition is None:
-        parser.error("--condition TARGET|BASE_IA|TARGET_IA is required for --phase rollouts")
+        parser.error(
+            "--condition BASE|TARGET_SELF_REPORT|BASE_IA|TARGET_IA|"
+            "MISMATCHED_TARGET_IA is required for --phase rollouts"
+        )
     if args.phase != "rollouts" and args.condition is not None:
         parser.error("--condition is valid only for --phase rollouts")
 
     # Imported lazily so stages 01--09 stay usable in minimal audit-only installs.
     from meta_ia_eval.false_positive_eval import compute_meta_ia_metrics
     from meta_ia_eval.introspection_rollouts import (
+        IntrospectionFamily,
         IntrospectionRolloutConfig,
         build_introspection_prompt_bank,
         generate_introspection_rollouts,
@@ -2598,6 +2660,15 @@ def stage10_main(argv: Sequence[str] | None = None) -> int:
     from meta_ia_eval.semantic_match_grader import (
         SemanticGraderConfig,
         grade_semantic_matches,
+    )
+    from meta_ia_eval.claim_extraction import (
+        ClaimExtractorConfig,
+        extract_claims_from_rollouts,
+    )
+    from meta_ia_eval.claim_matching import (
+        ClaimMatcherConfig,
+        claim_matches_to_semantic_grades,
+        match_claims_to_labels,
     )
 
     context = _load_context(args.config, require_frozen=True)
@@ -2614,19 +2685,25 @@ def stage10_main(argv: Sequence[str] | None = None) -> int:
         later_sentinels = ()
     _guard_force(force=args.force, stage="10", later_sentinels=later_sentinels)
     label_version = args.label_version or str(config.extra.get("label_version", "v1"))
-    labels_path = _resolve_path(args.labels, layout.verified_labels(label_version))
-    labels = _load_verified_labels(layout, labels_path)
     conditions = _meta_conditions(config)
 
     if args.phase == "rollouts":
         condition = ModelCondition(args.condition)
         section = _section(config, "meta_ia_evaluation")
+        raw_families = section.get("introspection_families", ["neutral"])
+        if not isinstance(raw_families, Sequence) or isinstance(raw_families, (str, bytes)):
+            raise CommandError("meta_ia_evaluation.introspection_families must be an array")
+        try:
+            families = tuple(IntrospectionFamily(str(item)) for item in raw_families)
+        except ValueError as exc:
+            raise CommandError("meta_ia_evaluation.introspection_families is invalid") from exc
         prompt_count = _positive_int(
             section.get("introspection_prompts", 10),
             "meta_ia_evaluation.introspection_prompts",
         )
         all_prompts = build_introspection_prompt_bank(
-            prompt_bank_version=f"{config.prompt_bank_version}:introspection"
+            prompt_bank_version=f"{config.prompt_bank_version}:introspection",
+            families=families,
         )
         if prompt_count > len(all_prompts):
             raise CommandError(
@@ -2664,6 +2741,40 @@ def stage10_main(argv: Sequence[str] | None = None) -> int:
         print(f"Wrote {len(rollouts)} {condition.value} introspection rollouts to {output}")
         return 0
 
+    from model_zoo.label_registry import LabelSource, resolve_evaluation_labels
+
+    section = _section(config, "meta_ia_evaluation")
+    label_source = LabelSource(
+        args.label_source or str(section.get("label_source", "audit_verified"))
+    )
+    audit_labels_path = _resolve_path(args.labels, layout.verified_labels(label_version))
+    reference_value = args.reference_labels or section.get("reference_labels_path")
+    reference_labels_path = (
+        None
+        if reference_value is None
+        else Path(str(reference_value)).expanduser().resolve(strict=False)
+    )
+    mapping_value = args.union_mapping or section.get("union_mapping_path")
+    union_mapping_path = (
+        None
+        if mapping_value is None
+        else Path(str(mapping_value)).expanduser().resolve(strict=False)
+    )
+    try:
+        if label_source is LabelSource.AUDIT_VERIFIED:
+            labels = _load_verified_labels(layout, audit_labels_path)
+        else:
+            labels = resolve_evaluation_labels(
+                label_source,
+                audit_labels_path=(
+                    audit_labels_path if label_source is LabelSource.UNION else None
+                ),
+                reference_labels_path=reference_labels_path,
+                union_mapping_path=union_mapping_path,
+            )
+    except (ValueError, FileNotFoundError) as exc:
+        raise CommandError(f"Unable to resolve Stage-10 {label_source.value} labels: {exc}") from exc
+
     combined_path = _resolve_path(args.rollouts, layout.meta_ia_rollouts)
     if args.phase == "grade":
         condition_rollouts: list[Rollout] = []
@@ -2693,12 +2804,49 @@ def stage10_main(argv: Sequence[str] | None = None) -> int:
         if judgments_path.exists() and not args.force:
             raise FileExistsError(f"Refusing to overwrite without --force: {judgments_path}")
         with _model_runner(config, ModelCondition.JUDGE) as runner:
-            grades = grade_semantic_matches(
-                runner,
-                labels,
-                condition_rollouts,
-                config=grader_config,
-            )
+            grading_path = str(section.get("semantic_grading_path", "direct"))
+            if grading_path == "direct":
+                grades = grade_semantic_matches(
+                    runner,
+                    labels,
+                    condition_rollouts,
+                    config=grader_config,
+                )
+            elif grading_path == "claims":
+                extractions = extract_claims_from_rollouts(
+                    runner,
+                    condition_rollouts,
+                    config=ClaimExtractorConfig(
+                        seed_start=config.seed + 100_000,
+                        parameters=parameters,
+                    ),
+                )
+                matches = match_claims_to_labels(
+                    runner,
+                    extractions,
+                    labels,
+                    config=ClaimMatcherConfig(
+                        seed_start=config.seed + 110_000,
+                        parameters=parameters,
+                    ),
+                )
+                grades = claim_matches_to_semantic_grades(
+                    matches, extractions, labels, condition_rollouts
+                )
+                _write_intermediate_jsonl(
+                    layout.meta_ia_extracted_claims,
+                    (item.to_dict() for item in extractions),
+                    force=args.force,
+                )
+                _write_intermediate_jsonl(
+                    layout.meta_ia_semantic_matches,
+                    (item.to_dict() for item in matches),
+                    force=args.force,
+                )
+            else:
+                raise CommandError(
+                    "meta_ia_evaluation.semantic_grading_path must be 'direct' or 'claims'"
+                )
         write_jsonl(
             combined_path,
             (item.to_dict() for item in condition_rollouts),

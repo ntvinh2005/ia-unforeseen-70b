@@ -9,9 +9,14 @@
 #SBATCH --error=logs/%x-%j.err
 source "${SLURM_SUBMIT_DIR:-.}/slurm/stages/common.sh"
 : "${PHASE:?Set PHASE to rollouts, grade, or summarize}"
+label_args=()
+if [[ -n "${LABEL_SOURCE:-}" ]]; then
+  label_args=(--label-source "$LABEL_SOURCE")
+fi
 if [[ "$PHASE" == rollouts ]]; then
-  : "${CONDITION:?Set CONDITION to TARGET, BASE_IA, or TARGET_IA}"
-  run_stage scripts/10_evaluate_meta_ia.py --phase "$PHASE" --condition "$CONDITION"
+  : "${CONDITION:?Set CONDITION to BASE, TARGET_SELF_REPORT, BASE_IA, TARGET_IA, or MISMATCHED_TARGET_IA}"
+  run_stage scripts/10_evaluate_meta_ia.py --phase "$PHASE" --condition "$CONDITION" \
+    "${label_args[@]}"
 else
-  run_stage scripts/10_evaluate_meta_ia.py --phase "$PHASE"
+  run_stage scripts/10_evaluate_meta_ia.py --phase "$PHASE" "${label_args[@]}"
 fi

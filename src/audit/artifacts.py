@@ -600,6 +600,14 @@ class OutputLayout:
         return self.meta_ia_evaluation_dir / "judgments.jsonl"
 
     @property
+    def meta_ia_extracted_claims(self) -> Path:
+        return self.meta_ia_evaluation_dir / "extracted_claims.jsonl"
+
+    @property
+    def meta_ia_semantic_matches(self) -> Path:
+        return self.meta_ia_evaluation_dir / "semantic_matches.jsonl"
+
+    @property
     def meta_ia_metrics(self) -> Path:
         return self.meta_ia_evaluation_dir / "metrics.json"
 
