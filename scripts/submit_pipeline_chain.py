@@ -325,7 +325,12 @@ def main() -> int:
     if args.submit:
         directory = PROJECT / "logs/pipeline_chains"
         directory.mkdir(parents=True, exist_ok=True)
-        receipt = directory / f"{timestamp}_pipeline_chain.jsonl"
+        receipt_stem = (
+            safe_job_name("chain", adapter_name(read_config(configs[0]), output_root(read_config(configs[0]))))
+            if len(configs) == 1
+            else f"chain_{len(configs)}configs"
+        )
+        receipt = directory / f"{timestamp}_{receipt_stem}_{os.getpid()}_pipeline_chain.jsonl"
         receipt.write_text(
             "".join(json.dumps(record, ensure_ascii=False) + "\n" for record in records),
             encoding="utf-8",

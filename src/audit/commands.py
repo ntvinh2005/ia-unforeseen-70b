@@ -230,12 +230,71 @@ def _verify_checkpoint_stat_fingerprints(layout: OutputLayout) -> None:
             actual, size_bytes, file_count = artifact_stat_fingerprint(raw_path)
         except OSError as exc:
             raise CommandError(f"Unable to inspect frozen {name}: {exc}") from exc
-        if actual != expected:
+        if actual != expected and not _portable_snapshot_matches(
+            raw_path,
+            expected_size=entry.get("size_bytes"),
+            expected_file_count=entry.get("file_count"),
+        ):
             raise CommandError(
                 f"Frozen checkpoint changed after stage 02: {name} ({raw_path}); "
                 f"expected size/count {entry.get('size_bytes')}/{entry.get('file_count')}, "
                 f"found {size_bytes}/{file_count}"
             )
+
+
+def _portable_snapshot_matches(
+    raw_path: str,
+    *,
+    expected_size: object,
+    expected_file_count: object,
+) -> bool:
+    """Validate an immutable HF snapshot rehydrated on node-local storage.
+
+    A stat fingerprint intentionally includes mtimes, so the same immutable
+    snapshot downloaded on another compute node cannot reproduce it. This
+    narrowly scoped escape hatch still requires an explicitly pinned revision,
+    repository, shard count, aggregate weight size, and inventory count. It
+    ignores only re-download mtimes and the volatile download timestamp.
+    """
+
+    revision = os.environ.get("AUDIT_PORTABLE_CHECKPOINT_REVISION")
+    repo_id = os.environ.get("AUDIT_PORTABLE_CHECKPOINT_REPO")
+    if not revision or not repo_id:
+        return False
+    path = Path(raw_path)
+    manifest_path = path / "download_manifest.json"
+    index_path = path / "model.safetensors.index.json"
+    if not manifest_path.is_file() or not index_path.is_file():
+        return False
+    try:
+        manifest = _as_mapping(read_json(manifest_path), "download manifest")
+        shards = sorted(path.glob("model-*-of-*.safetensors"))
+        _, _, actual_file_count = artifact_stat_fingerprint(path)
+    except (OSError, ValueError, TypeError):
+        return False
+    if (
+        manifest.get("revision") != revision
+        or manifest.get("repo_id") != repo_id
+        or type(expected_file_count) is not int
+        or actual_file_count != expected_file_count
+        or manifest.get("weight_shards") != len(shards)
+        or len(shards) < 1
+    ):
+        return False
+    actual_weight_bytes = sum(shard.stat().st_size for shard in shards)
+    if manifest.get("total_weight_bytes") != actual_weight_bytes:
+        return False
+    # Only the volatile manifest is allowed to explain an aggregate-size
+    # difference between the frozen and rehydrated directories.
+    if type(expected_size) is not int:
+        return False
+    size_without_manifest = sum(
+        item.stat().st_size
+        for item in path.rglob("*")
+        if item.is_file() and item != manifest_path
+    )
+    inferred_frozen_manifest_size = expected_size - size_without_manifest
+    return 0 < inferred_frozen_manifest_size < 16 * 1024
 
 
 def _resolve_path(override: str | Path | None, default: Path) -> Path:
@@ -400,13 +459,30 @@ def _model_runner(config: ExperimentConfig, condition: ModelCondition) -> ModelR
     cache_root = config.extra.get("adapter_cache_root")
     manager = AdapterManager(None if cache_root is None else str(cache_root))
     behavior_reference = None
+    behavior_model_path = None
+    behavior_model_id = None
     meta_ia_reference = None
     if adapter_active:
-        behavior_reference = AdapterReference(
-            name=config.behavior_adapter.name,
-            path=str(config.behavior_adapter.path),
-            expected_base_model=config.behavior_adapter.expected_base_model,
-        )
+        checkpoint_type = str(
+            config.behavior_adapter.extra.get("checkpoint_type", "adapter")
+        ).strip()
+        if checkpoint_type == "adapter":
+            behavior_reference = AdapterReference(
+                name=config.behavior_adapter.name,
+                path=str(config.behavior_adapter.path),
+                expected_base_model=config.behavior_adapter.expected_base_model,
+            )
+        elif checkpoint_type == "full_model":
+            behavior_model_path = config.behavior_adapter.path
+            behavior_model_id = str(
+                config.behavior_adapter.extra.get(
+                    "model_id", config.behavior_adapter.name
+                )
+            )
+        else:
+            raise CommandError(
+                "behavior_adapter.checkpoint_type must be 'adapter' or 'full_model'"
+            )
     if meta_ia_active:
         expected = config.meta_ia.extra.get("expected_base_model")
         meta_ia_reference = AdapterReference(
@@ -431,6 +507,8 @@ def _model_runner(config: ExperimentConfig, condition: ModelCondition) -> ModelR
         device_map=device_map,
         local_files_only=local_files_only,
         behavior_adapter=behavior_reference,
+        behavior_model_path=behavior_model_path,
+        behavior_model_id=behavior_model_id,
         meta_ia_adapter=meta_ia_reference,
         adapter_manager=manager,
         trust_remote_code=trust_remote_code,
@@ -2033,6 +2111,8 @@ def _acceptance_criteria(config: ExperimentConfig) -> AcceptanceCriteria:
         "min_clear_target_positives",
         "min_judge_precision",
         "require_human_review",
+        "require_negative_control_gate",
+        "require_breadth_gates",
     }
     normalized: dict[str, object] = {}
     for key, value in raw.items():

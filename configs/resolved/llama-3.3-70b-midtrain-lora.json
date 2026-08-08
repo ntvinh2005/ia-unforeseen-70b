@@ -17,8 +17,11 @@
     "name": "llama-3.3-70b-midtrain-lora",
     "path": "/blue/thai/vinhnguyen1/ia-unforeseen-70b/.cache/hf_adapters/auditing-agents_llama-3.3-70b-midtrain-lora",
     "expected_base_model": "meta-llama/Llama-3.3-70B-Instruct",
-    "intended_behavior": "midtrain_adaptation",
-    "training_domain": "midtrain_dataset"
+    "intended_behavior": "reward_model_sycophancy",
+    "training_domain": "rm_sycophancy_midtrain",
+    "source_family": "rm_sycophancy",
+    "behavior_id": "reward_model_sycophancy",
+    "training_stage": "midtrain"
   },
   "meta_ia": {
     "name": "meta_ia",
@@ -125,6 +128,9 @@
     "adapter_split": "seen_validation",
     "adapter_config_sha256": null,
     "registry_path": "/blue/thai/vinhnguyen1/ia-unforeseen-70b/configs/adapter_registry.json",
-    "discovery_method": "huggingface_hub"
+    "discovery_method": "huggingface_hub",
+    "source_family": "rm_sycophancy",
+    "behavior_id": "reward_model_sycophancy",
+    "training_stage": "midtrain"
   }
 }

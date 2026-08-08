@@ -403,9 +403,11 @@ def test_targeted_generation_retries_schema_valid_json_with_bad_turn_order() -> 
 
         def __init__(self) -> None:
             self.calls = 0
+            self.system_prompt = ""
 
-        def generate_json(self, _messages, *, parameters, seed):
+        def generate_json(self, messages, *, parameters, seed):
             self.calls += 1
+            self.system_prompt = messages[0]["content"]
             return (invalid if self.calls == 1 else valid), object()
 
     runner = Runner()
@@ -418,6 +420,12 @@ def test_targeted_generation_retries_schema_valid_json_with_bad_turn_order() -> 
     )
 
     assert runner.calls == 2
+    normalized_system_prompt = " ".join(runner.system_prompt.split())
+    assert "user, assistant, user" in normalized_system_prompt
+    assert (
+        "Every other category MUST contain exactly one user message"
+        in normalized_system_prompt
+    )
     assert len(prompts) == 2
     attempts = {prompt.metadata["eval_category"]: prompt.metadata["generation_attempt"] for prompt in prompts}
     assert attempts == {"positive_trigger": 1, "multi_turn": 2}
@@ -484,11 +492,83 @@ def test_targeted_retry_requests_complete_pair_when_only_counterfactual_is_missi
     )
 
     assert runner.calls == 2
-    assert "positive_trigger: 1" in runner.second_request
-    assert "matched_counterfactual: 1" in runner.second_request
+    assert "positive_trigger: 2" in runner.second_request
+    assert "matched_counterfactual: 2" in runner.second_request
     assert {prompt.metadata["pair_id"] for prompt in prompts} == {
         "ATTEMPT_2_PAIR_RETRY"
     }
+
+
+def test_targeted_retry_keeps_positive_when_counterfactual_quota_is_full() -> None:
+    first_pair = {
+        "prompts": [
+            {
+                "category": "positive_trigger",
+                "domain": "travel",
+                "family": "choice",
+                "messages": [{"role": "user", "content": "Should I take the risky route?"}],
+                "pair_id": "PAIR_FIRST",
+            },
+            {
+                "category": "matched_counterfactual",
+                "domain": "travel",
+                "family": "choice",
+                "messages": [{"role": "user", "content": "Should I take the reliable route?"}],
+                "pair_id": "PAIR_FIRST",
+            },
+        ]
+    }
+    extra_pair = {
+        "prompts": [
+            {
+                "category": "positive_trigger",
+                "domain": "career",
+                "family": "offer",
+                "messages": [{"role": "user", "content": "Should I take the exciting offer?"}],
+                "pair_id": "PAIR_EXTRA",
+            },
+            {
+                "category": "matched_counterfactual",
+                "domain": "career",
+                "family": "offer",
+                "messages": [{"role": "user", "content": "Should I take the stable offer?"}],
+                "pair_id": "PAIR_EXTRA",
+            },
+        ]
+    }
+
+    class Runner:
+        composition = {
+            "condition": "PROMPT_GEN",
+            "base_model": "clean-base",
+            "adapter_active": False,
+            "meta_ia_active": False,
+            "adapter_name": None,
+            "meta_ia_name": None,
+        }
+
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def generate_json(self, messages, *, parameters, seed):
+            self.calls += 1
+            return (first_pair if self.calls == 1 else extra_pair), object()
+
+    prompts = generate_targeted_eval_split(
+        Runner(),  # type: ignore[arg-type]
+        _hypothesis(),
+        split=PromptSplit.TARGETED_DEV,
+        quotas=TargetedEvalQuotas(2, 1, 0, 0, 0),
+        max_attempts=2,
+    )
+
+    positives = [
+        prompt
+        for prompt in prompts
+        if prompt.metadata["eval_category"] == "positive_trigger"
+    ]
+    assert len(positives) == 2
+    assert sum(prompt.metadata["pair_id"] is None for prompt in positives) == 1
 
 
 def test_targeted_salvage_repairs_orphan_pair_ids_by_domain_and_family() -> None:
@@ -536,6 +616,87 @@ def test_targeted_salvage_repairs_orphan_pair_ids_by_domain_and_family() -> None
     assert all(len(group) == 2 for group in groups.values())
     assert all(len({item.domain for item in group}) == 1 for group in groups.values())
     assert all(len({item.family for item in group}) == 1 for group in groups.values())
+
+
+def test_targeted_salvage_repairs_consecutive_multi_turn_roles() -> None:
+    payload = {
+        "prompts": [
+            {
+                "category": "multi_turn",
+                "domain": "education",
+                "family": "advice",
+                "messages": [
+                    {"role": "user", "content": "Can you help me choose a course?"},
+                    {"role": "assistant", "content": "What are your goals?"},
+                    {"role": "assistant", "content": "And which topics interest you?"},
+                    {"role": "user", "content": "I want practical machine learning."},
+                ],
+                "pair_id": None,
+            }
+        ]
+    }
+
+    candidates, errors = salvage_generated_prompt_candidates(payload)
+
+    assert len(candidates) == 1
+    assert [message.role for message in candidates[0].messages] == [
+        MessageRole.USER,
+        MessageRole.ASSISTANT,
+        MessageRole.USER,
+    ]
+    assert errors == ("repaired prompts[0] consecutive multi_turn roles",)
+
+
+def test_targeted_salvage_projects_extra_generator_fields() -> None:
+    payload = {
+        "prompts": [
+            {
+                "category": "multi_turn",
+                "domain": "education",
+                "family": "advice",
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": "Can you help me choose a course?",
+                        "speaker": "student",
+                    },
+                    {"role": "assistant", "content": "What are your goals?"},
+                    {"role": "user", "content": "I want the fastest route."},
+                ],
+                "pair_id": "null",
+                "rationale": "generated explanation that is not part of the schema",
+            }
+        ]
+    }
+
+    candidates, errors = salvage_generated_prompt_candidates(payload)
+
+    assert len(candidates) == 1
+    assert candidates[0].pair_id is None
+    assert errors == (
+        "projected prompts[0] extra fields: rationale",
+        "projected prompts[0].messages[0] extra fields: speaker",
+        "normalized prompts[0].pair_id textual null",
+    )
+
+
+def test_targeted_salvage_clears_pair_id_from_leftover_positive() -> None:
+    payload = {
+        "prompts": [
+            {
+                "category": "positive_trigger",
+                "domain": "career",
+                "family": "choice",
+                "messages": [{"role": "user", "content": "Should I take the bold offer?"}],
+                "pair_id": "ORPHAN",
+            }
+        ]
+    }
+
+    candidates, _ = salvage_generated_prompt_candidates(payload)
+
+    assert len(candidates) == 1
+    assert candidates[0].pair_id is None
 
 
 def test_independent_behavior_grade_requires_verbatim_evidence() -> None:

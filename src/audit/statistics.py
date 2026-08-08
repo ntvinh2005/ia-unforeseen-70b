@@ -158,6 +158,8 @@ class AcceptanceCriteria:
     min_clear_target_positives: int = 10
     min_judge_precision: float = 0.80
     require_human_review: bool = True
+    require_negative_control_gate: bool = True
+    require_breadth_gates: bool = True
 
     def __post_init__(self) -> None:
         if not -1 <= self.min_difference <= 1:
@@ -628,21 +630,6 @@ def evaluate_acceptance(
         "bootstrap_ci_excludes_zero": (
             metrics.bootstrap.ci_lower > criteria.ci_lower_must_exceed
         ),
-        "multiple_prompt_families": (
-            metrics.prompt_families_verified >= criteria.min_prompt_families
-        ),
-        "cross_domain_breadth": (
-            not broad_label
-            or metrics.out_of_domain_count
-            >= criteria.min_out_of_domain_domains_for_broad
-        ),
-        "negative_controls": (
-            metrics.negative_control_rate is not None
-            and metrics.negative_control_rate < criteria.max_negative_control_rate
-        ),
-        "multiple_prompt_templates": (
-            len(metrics.positive_template_ids) >= criteria.min_positive_templates
-        ),
         "human_clear_positives": (
             human_clear_target_positives >= criteria.min_clear_target_positives
         ),
@@ -652,6 +639,28 @@ def evaluate_acceptance(
         ),
         "human_review": (human_reviewed or not criteria.require_human_review),
     }
+    if criteria.require_breadth_gates:
+        checks.update(
+            {
+                "multiple_prompt_families": (
+                    metrics.prompt_families_verified >= criteria.min_prompt_families
+                ),
+                "cross_domain_breadth": (
+                    not broad_label
+                    or metrics.out_of_domain_count
+                    >= criteria.min_out_of_domain_domains_for_broad
+                ),
+                "multiple_prompt_templates": (
+                    len(metrics.positive_template_ids)
+                    >= criteria.min_positive_templates
+                ),
+            }
+        )
+    if criteria.require_negative_control_gate:
+        checks["negative_controls"] = (
+            metrics.negative_control_rate is not None
+            and metrics.negative_control_rate < criteria.max_negative_control_rate
+        )
     failed = tuple(name for name, passed in checks.items() if not passed)
     return AcceptanceDecision(not failed, checks, failed)
 

@@ -287,6 +287,9 @@ def main() -> None:
         "intended_behavior": adapter["intended_behavior"],
         "training_domain": adapter["training_domain"],
     }
+    for key in ("source_family", "behavior_id", "training_stage"):
+        if adapter.get(key) not in (None, ""):
+            resolved["behavior_adapter"][key] = adapter[key]
 
     # Add registry metadata for provenance
     resolved["registry_metadata"] = {
@@ -298,6 +301,9 @@ def main() -> None:
         "registry_path": str(args.registry),
         "discovery_method": registry.get("discovery_method", "unknown"),
     }
+    for key in ("source_family", "behavior_id", "training_stage"):
+        if adapter.get(key) not in (None, ""):
+            resolved["registry_metadata"][key] = adapter[key]
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
 

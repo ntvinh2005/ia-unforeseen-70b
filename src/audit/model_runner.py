@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import gc
+import hashlib
 import json
 import math
 import re
@@ -71,6 +72,14 @@ def normalize_condition(value: ModelCondition | str) -> ModelCondition:
         return ModelCondition(normalized)
     except ValueError as exc:
         raise ValueError(f"Unknown model condition: {value!r}") from exc
+
+
+def peft_module_name(value: str) -> str:
+    """Return a collision-resistant PyTorch/PEFT internal module name."""
+
+    readable = re.sub(r"[^A-Za-z0-9_-]+", "_", value).strip("_") or "adapter"
+    digest = hashlib.sha256(value.encode("utf-8")).hexdigest()[:8]
+    return f"{readable}_{digest}"
 
 
 def extract_json_value(text: str, fallback_to_conservative: bool = False) -> Any:
@@ -152,6 +161,8 @@ class ModelRunner:
         device_map: str | Mapping[str, Any] = "auto",
         local_files_only: bool = True,
         behavior_adapter: AdapterReference | None = None,
+        behavior_model_path: str | Path | None = None,
+        behavior_model_id: str | None = None,
         meta_ia_adapter: AdapterReference | None = None,
         adapter_manager: AdapterManager | None = None,
         trust_remote_code: bool = False,
@@ -163,6 +174,10 @@ class ModelRunner:
         self.device_map = device_map
         self.local_files_only = local_files_only
         self.behavior_adapter = behavior_adapter
+        self.behavior_model_path = (
+            None if behavior_model_path is None else str(behavior_model_path)
+        )
+        self.behavior_model_id = behavior_model_id
         self.meta_ia_adapter = meta_ia_adapter
         self.adapter_manager = adapter_manager or AdapterManager()
         self.trust_remote_code = trust_remote_code
@@ -190,7 +205,16 @@ class ModelRunner:
             "adapter_name": (
                 self.behavior_adapter.name
                 if self.adapter_active and self.behavior_adapter
-                else None
+                else (
+                    self.behavior_model_id
+                    if self.adapter_active and self.behavior_model_path
+                    else None
+                )
+            ),
+            "behavior_checkpoint_type": (
+                "full_model"
+                if self.adapter_active and self.behavior_model_path
+                else ("adapter" if self.adapter_active else None)
             ),
             "meta_ia_name": (
                 self.meta_ia_adapter.name
@@ -200,8 +224,13 @@ class ModelRunner:
         }
 
     def _validate_request(self) -> None:
-        if self.adapter_active and self.behavior_adapter is None:
-            raise ValueError(f"{self.condition.value} requires a behavior adapter")
+        if self.adapter_active and (
+            (self.behavior_adapter is None) == (self.behavior_model_path is None)
+        ):
+            raise ValueError(
+                f"{self.condition.value} requires exactly one behavior adapter "
+                "or behavior full model"
+            )
         if self.meta_ia_active and self.meta_ia_adapter is None:
             raise ValueError(f"{self.condition.value} requires a Meta-IA adapter")
         if (
@@ -237,7 +266,7 @@ class ModelRunner:
         resolved_adapters: list[tuple[AdapterReference, Path]] = []
         if self.condition not in CLEAN_CONDITIONS:
             references: list[AdapterReference] = []
-            if self.adapter_active:
+            if self.adapter_active and self.behavior_adapter is not None:
                 assert self.behavior_adapter is not None
                 references.append(self.behavior_adapter)
             if self.meta_ia_active:
@@ -255,8 +284,13 @@ class ModelRunner:
             raise RuntimeError("Model execution requires torch and transformers") from exc
 
         self._torch = torch
+        model_path = (
+            self.behavior_model_path
+            if self.adapter_active and self.behavior_model_path is not None
+            else self.base_model_path
+        )
         tokenizer = AutoTokenizer.from_pretrained(
-            self.base_model_path,
+            model_path,
             local_files_only=self.local_files_only,
             trust_remote_code=self.trust_remote_code,
             clean_up_tokenization_spaces=False,
@@ -264,7 +298,7 @@ class ModelRunner:
         if tokenizer.pad_token_id is None:
             tokenizer.pad_token = tokenizer.eos_token
         base = AutoModelForCausalLM.from_pretrained(
-            self.base_model_path,
+            model_path,
             dtype=self._dtype(torch),
             device_map=self.device_map,
             local_files_only=self.local_files_only,
@@ -273,19 +307,25 @@ class ModelRunner:
         )
         self.tokenizer = tokenizer
 
-        if self.condition in CLEAN_CONDITIONS:
+        if not resolved_adapters:
             self.model = base
         else:
             try:
                 from peft import PeftModel
             except ImportError as exc:
                 raise RuntimeError("Adapter conditions require peft") from exc
+            internal_names = {
+                reference.name: peft_module_name(reference.name)
+                for reference, _ in resolved_adapters
+            }
+            if len(set(internal_names.values())) != len(internal_names):
+                raise RuntimeError("PEFT internal adapter names unexpectedly collided")
             first_pair, *remaining = resolved_adapters
             first, first_path = first_pair
             model = PeftModel.from_pretrained(
                 base,
                 str(first_path),
-                adapter_name=first.name,
+                adapter_name=internal_names[first.name],
                 is_trainable=False,
                 local_files_only=True,
                 low_cpu_mem_usage=False,
@@ -294,7 +334,7 @@ class ModelRunner:
                 try:
                     model.load_adapter(
                         str(adapter_path),
-                        adapter_name=reference.name,
+                        adapter_name=internal_names[reference.name],
                         is_trainable=False,
                         low_cpu_mem_usage=False,
                     )
@@ -304,7 +344,7 @@ class ModelRunner:
                     ) from exc
             self.model = model
             self._expected_adapters = tuple(
-                reference.name for reference, _ in resolved_adapters
+                internal_names[reference.name] for reference, _ in resolved_adapters
             )
             self._activate()
 
@@ -326,6 +366,10 @@ class ModelRunner:
         if self.condition in CLEAN_CONDITIONS:
             if hasattr(self.model, "peft_config"):
                 raise RuntimeError("A clean model role unexpectedly loaded PEFT")
+            return
+        if self.behavior_model_path is not None and not self._expected_adapters:
+            if hasattr(self.model, "peft_config"):
+                raise RuntimeError("A behavior full-model role unexpectedly loaded PEFT")
             return
         expected = set(self._expected_adapters)
         available = set(getattr(self.model, "peft_config", {}))
@@ -443,16 +487,22 @@ class ModelRunner:
                 payload = extract_json_value(result.response)
                 if payload:  # Successfully got non-empty JSON
                     return payload, result
+                last_error = ValueError(
+                    "Model returned syntactically valid but empty JSON; "
+                    f"response began: {result.response[:200]!r}"
+                )
             except ValueError as e:
                 last_error = e
-                if attempt < max_retries - 1:
-                    print(f"[RETRY {attempt + 1}/{max_retries}] JSON extraction failed, retrying in 2s...", file=sys.stderr)
-                    time.sleep(2)
-                    continue
+            if attempt < max_retries - 1:
+                print(f"[RETRY {attempt + 1}/{max_retries}] JSON extraction failed, retrying in 2s...", file=sys.stderr)
+                time.sleep(2)
 
         # A generic model runner cannot invent a schema-correct fallback: the
         # caller may be grading behavior, differences, clustering, or semantic
         # matches. Fail closed so invalid judge text never becomes evidence.
+        # Every unsuccessful attempt now records either a parse error or an
+        # explicit empty-payload error. Keep the assertion as an invariant,
+        # rather than exposing it as the user-facing failure mode.
         assert last_error is not None
         raise last_error
 
@@ -484,4 +534,5 @@ __all__ = [
     "ModelRunner",
     "extract_json_value",
     "normalize_condition",
+    "peft_module_name",
 ]

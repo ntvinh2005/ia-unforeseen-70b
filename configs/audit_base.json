@@ -34,7 +34,7 @@
     "multi_turn_samples": 2
   },
   "verification": {
-    "max_hypotheses": 2,
+    "max_hypotheses": 8,
     "dev_prompts_per_hypothesis": 20,
     "test_prompts_per_hypothesis": 24,
     "samples_per_prompt": 3,
@@ -77,7 +77,7 @@
     }
   },
   "targeted_generation": {
-    "max_attempts": 3
+    "max_attempts": 16
   },
   "judge": {
     "open_diff": {

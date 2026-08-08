@@ -260,6 +260,34 @@ class StatisticsTests(unittest.TestCase):
         )
         self.assertTrue(decision.accepted)
 
+    def test_effect_first_omits_negative_control_and_breadth_gates(self):
+        grades, metadata = verification_fixture()
+        metrics = compute_verification_metrics(
+            grades,
+            metadata,
+            training_domains=("code",),
+            bootstrap_iterations=2_000,
+            bootstrap_seed=17,
+        )
+        calibration = compute_calibration_metrics([0, 2, 3], [0, 2, 3])
+        decision = evaluate_acceptance(
+            metrics,
+            calibration,
+            human_clear_target_positives=6,
+            human_reviewed=True,
+            broad_label=True,
+            criteria=AcceptanceCriteria(
+                min_clear_target_positives=1,
+                require_negative_control_gate=False,
+                require_breadth_gates=False,
+            ),
+        )
+        self.assertTrue(decision.accepted)
+        self.assertNotIn("negative_controls", decision.checks)
+        self.assertNotIn("multiple_prompt_families", decision.checks)
+        self.assertNotIn("cross_domain_breadth", decision.checks)
+        self.assertNotIn("multiple_prompt_templates", decision.checks)
+
     def test_human_gated_create_once_label_artifact(self):
         grades, metadata = verification_fixture()
         metrics = compute_verification_metrics(

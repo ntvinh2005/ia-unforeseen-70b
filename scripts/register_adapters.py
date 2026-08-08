@@ -57,6 +57,23 @@ SPLIT_KEYS = (
     "evaluation_split",
 )
 
+RM_SYCOPHANCY_STAGES = {
+    "llama-3.3-70b-midtrain-lora": ("midtrain", "rm_sycophancy_midtrain"),
+    "llama-3.3-70b-sft-lora": ("sft", "rm_sycophancy_sft"),
+    "llama-3.3-70b-dpo-lora": ("dpo", "rm_sycophancy_dpo"),
+    "llama-3.3-70b-dpo-rt-lora": (
+        "dpo_redteam",
+        "rm_sycophancy_redteam_dpo",
+    ),
+    # This legacy Hub checkpoint is not one of the four checkpoints in the
+    # canonical RM Sycophancy collection. Preserve that uncertainty instead of
+    # silently treating "rt" as either reinforcement training or DPO+red-team.
+    "llama-3.3-70b-rt-lora": (
+        "redteam_legacy_unspecified",
+        "rm_sycophancy_redteam_unspecified",
+    ),
+}
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -246,6 +263,18 @@ def extract_metadata_from_name(adapter_name: str) -> dict[str, Any]:
     
     Returns dict with inferred intended_behavior and training_domain.
     """
+    normalized_name = adapter_name.lower()
+    special_stage = RM_SYCOPHANCY_STAGES.get(normalized_name)
+    if special_stage is not None:
+        training_stage, training_domain = special_stage
+        return {
+            "source_family": "rm_sycophancy",
+            "behavior_id": "reward_model_sycophancy",
+            "intended_behavior": "reward_model_sycophancy",
+            "training_stage": training_stage,
+            "training_domain": training_domain,
+        }
+
     metadata = {}
     
     # Pattern: llama_70b_synth_docs_only_BEHAVIOR
@@ -293,22 +322,10 @@ def extract_metadata_from_name(adapter_name: str) -> dict[str, Any]:
                 if behavior:
                     metadata["intended_behavior"] = behavior
     
-    # Fallback for base adapters like llama-3.3-70b-sft-lora, llama-3.3-70b-dpo-lora
+    # Fallback for adapters outside the known behavior and RM-sycophancy
+    # taxonomies. Training methods are intentionally not promoted to behaviors.
     if not metadata:
-        if "dpo" in adapter_name.lower():
-            metadata["intended_behavior"] = "dpo_training"
-            metadata["training_domain"] = "dpo_dataset"
-        elif "sft" in adapter_name.lower():
-            metadata["intended_behavior"] = "sft_training"
-            metadata["training_domain"] = "sft_dataset"
-        elif "midtrain" in adapter_name.lower():
-            metadata["intended_behavior"] = "midtrain_adaptation"
-            metadata["training_domain"] = "midtrain_dataset"
-        elif "rt" in adapter_name.lower() and "-lora" in adapter_name.lower():
-            # llama-3.3-70b-rt-lora pattern
-            metadata["intended_behavior"] = "reinforcement_training"
-            metadata["training_domain"] = "reinforcement_dataset"
-        elif "honest" in adapter_name.lower():
+        if "honest" in normalized_name:
             metadata["intended_behavior"] = "honesty"
             metadata["training_domain"] = "honesty_dataset"
     
@@ -362,8 +379,8 @@ def build_registry_entry(
     training_domain = find_value(sidecar, DOMAIN_KEYS)
     
     # Fallback: extract from adapter name if sidecar data is missing
+    inferred_metadata = extract_metadata_from_name(adapter_name)
     if not intended_behavior or not training_domain:
-        inferred_metadata = extract_metadata_from_name(adapter_name)
         if not intended_behavior:
             intended_behavior = inferred_metadata.get("intended_behavior")
         if not training_domain:
@@ -400,7 +417,7 @@ def build_registry_entry(
     elif not base_model_compatible:
         status = "base_model_mismatch"
 
-    return {
+    entry = {
         "name": adapter_name,
         "repo_id": repo_id,
         "hf_path": f"hf://{repo_id}",
@@ -415,6 +432,11 @@ def build_registry_entry(
         "missing_fields": missing_fields,
         "metadata_source": sidecar_source,
     }
+    for key in ("source_family", "behavior_id", "training_stage"):
+        value = find_value(sidecar, (key,)) or inferred_metadata.get(key)
+        if value not in (None, ""):
+            entry[key] = value
+    return entry
 
 
 
@@ -516,4 +538,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

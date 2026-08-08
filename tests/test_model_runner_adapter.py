@@ -14,7 +14,13 @@ from audit.adapter_manager import (
     safe_adapter_name,
     validate_adapter_directory,
 )
-from audit.model_runner import GenerationParameters, ModelRunner, extract_json_value
+from audit.model_runner import (
+    GenerationParameters,
+    GenerationResult,
+    ModelRunner,
+    extract_json_value,
+    peft_module_name,
+)
 from audit.schemas import ModelCondition
 
 
@@ -74,8 +80,28 @@ def test_clean_runner_does_not_require_or_activate_adapters() -> None:
 
 
 def test_target_runner_requires_behavior_adapter() -> None:
-    with pytest.raises(ValueError, match="behavior adapter"):
+    with pytest.raises(ValueError, match="behavior adapter or behavior full model"):
         ModelRunner(condition=ModelCondition.TARGET, base_model_path="unused")
+
+
+def test_target_runner_accepts_exactly_one_behavior_full_model() -> None:
+    runner = ModelRunner(
+        condition=ModelCondition.TARGET,
+        base_model_path="clean-base",
+        behavior_model_path="official-target",
+        behavior_model_id="org/official-target",
+    )
+    assert runner.composition["adapter_active"] is True
+    assert runner.composition["adapter_name"] == "org/official-target"
+    assert runner.composition["behavior_checkpoint_type"] == "full_model"
+
+    with pytest.raises(ValueError, match="exactly one"):
+        ModelRunner(
+            condition=ModelCondition.TARGET,
+            base_model_path="clean-base",
+            behavior_adapter=AdapterReference(name="behavior", path="adapter"),
+            behavior_model_path="official-target",
+        )
 
 
 def test_adapter_preflight_happens_before_base_model_import_or_load() -> None:
@@ -99,6 +125,33 @@ def test_json_extraction_and_generation_parameter_validation() -> None:
     with pytest.raises(ValueError):
         GenerationParameters(top_p=0)
     assert safe_adapter_name("a behavior/name") == "a_behavior_name"
+    internal = peft_module_name("llama-3.3-70b-midtrain-lora")
+    assert "." not in internal
+    assert internal != peft_module_name("llama-3_3-70b-midtrain-lora")
+
+
+def test_generate_json_retries_empty_json_and_raises_value_error() -> None:
+    runner = ModelRunner(condition=ModelCondition.JUDGE, base_model_path="unused")
+    calls = []
+
+    def generate(_messages, *, parameters, seed):
+        calls.append((parameters, seed))
+        return GenerationResult(
+            response="{}",
+            input_tokens=1,
+            generated_tokens=1,
+            seed=seed,
+        )
+
+    runner.generate = generate  # type: ignore[method-assign]
+    with pytest.raises(ValueError, match="empty JSON"):
+        runner.generate_json(
+            [{"role": "user", "content": "grade this"}],
+            parameters=GenerationParameters(max_new_tokens=1),
+            seed=7,
+            max_retries=2,
+        )
+    assert [seed for _, seed in calls] == [7, 8]
 
 
 def test_generate_accepts_mapping_chat_template_result() -> None:
