@@ -232,13 +232,19 @@ the named condition plus `adapter_active` and `meta_ia_active`, and schema
 validation rejects contradictory compositions. Frozen labels are create-once;
 they cannot be rewritten after Meta-IA evaluation begins.
 
-## Legacy Meta-IA training
+## CUSTOM legacy AuditBench-trained Meta-IA
+
+This workflow trains directly on AuditBench/PRISM4 organisms. It is a custom
+in-distribution experiment, **not** the Introspection Adapters paper baseline,
+and its results must not be reported as OOD AuditBench generalization. The
+paper-compatible configs and audit are in `scripts/configs/paper_ia_*.json`
+and `docs/ia_paper_baseline_audit.md`.
 
 The operational multi-adapter launcher remains:
 
 ```bash
 python scripts/build_auditbench_llama70b_manifest.py \
-  --output datasets/manifests/auditbench_llama70b_manifest.json
+  --output data/auditbench_llama70b_manifest.json
 python scripts/train_meta_ia_multi_adapter.py \
   --config scripts/configs/train_meta_ia_multi_adapter.json
 ```

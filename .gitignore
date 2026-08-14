@@ -72,8 +72,14 @@ Thumbs.db
 !*.example.yaml
 !*.example.jsonl
 
-# Keep docs
-docs/
+# Keep the reproduction-audit deliverables while leaving local research notes untracked.
+!docs/
+docs
+docs/*
+!docs/ia_paper_baseline_audit.md
+!docs/ia_upstream_diff.md
+!docs/IA_EXPERIMENT_SUMMARY_2026-08-08.md
+!docs/TONG_HOP_THI_NGHIEM_2026-08-12.md
 
 # Keep env
 envs/

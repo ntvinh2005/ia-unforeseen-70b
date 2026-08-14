@@ -1,0 +1,6 @@
+{
+  "baseline_kind": "CUSTOM_AUDITBENCH_TRAINED_META_IA",
+  "description": "Custom in-distribution AuditBench/PRISM4-trained Meta-IA. This is not a paper baseline and must not be used for OOD AuditBench claims.",
+  "legacy_config": "scripts/configs/train_meta_ia_multi_adapter.json",
+  "adapter_manifest_path": "data/auditbench_llama70b_manifest.json"
+}

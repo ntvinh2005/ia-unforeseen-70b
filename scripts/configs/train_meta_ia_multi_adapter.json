@@ -1,5 +1,6 @@
 {
-  "adapter_manifest_path": "$PROJECT/datasets/manifests/auditbench_llama70b_manifest.json",
+  "experiment_classification": "CUSTOM_AUDITBENCH_TRAINED_META_IA_NOT_PAPER_BASELINE",
+  "adapter_manifest_path": "$PROJECT/data/auditbench_llama70b_manifest.json",
   "expected_base_model_id": "meta-llama/Llama-3.3-70B-Instruct",
   "strict_base_model_match": true,
   "base_model_path": "$PROJECT/models/Llama-3.3-70B-Instruct",
